@@ -27,6 +27,7 @@ import {
   Loader2,
   MessageCircle,
   MoreHorizontal,
+  Pause,
   Play,
   Search,
   Smartphone,
@@ -37,6 +38,10 @@ import { toast } from 'sonner'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  useAudioPlayer,
+  type PlaybackTrack,
+} from '@/components/AudioPlayer'
 import {
   Dialog,
   DialogContent,
@@ -104,7 +109,7 @@ const EXAMPLE_EPISODE =
   'https://www.xiaoyuzhoufm.com/episode/6ae967cec96c8942ec167f82'
 const EXAMPLE_PODCAST =
   'https://www.xiaoyuzhoufm.com/podcast/682c566cc7c5f17595635a2c'
-const BASE_TITLE = '宇宙备份 · 小宇宙音频与封面下载'
+const BASE_TITLE = '宇宙备份 · 小宇宙音频播放与下载'
 
 type Status = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -148,6 +153,18 @@ function recentlyResolved(data: ResolvedData): RecentItem {
 
 function isPaid(episode: Episode): boolean {
   return episode.payType !== 'FREE' || episode.isPrivate
+}
+
+/** The episode as the global player needs it. Paid episodes never get here. */
+function playbackTrack(episode: Episode): PlaybackTrack {
+  return {
+    id: episode.eid,
+    title: episode.title,
+    podcast: episode.podcast.title,
+    cover: episode.imageUrl,
+    src: episode.audioUrl,
+    duration: episode.duration,
+  }
 }
 
 /** Downloads cannot start inside WeChat's webview; explain instead of failing. */
@@ -444,7 +461,7 @@ export function ArchiveApp({ urlParam, onUrlChange }: ArchiveAppProps) {
             </h1>
 
             <p className="mx-auto mt-4 max-w-[520px] text-[14px] leading-7 text-muted-foreground sm:text-[15px]">
-              粘贴小宇宙的单集或播客链接，解析音频、封面与节目简介。
+              粘贴小宇宙的单集或播客链接，在线试听，或解析音频、封面与节目简介。
               下载由浏览器直接完成，文件名已经替你整理好。
             </p>
           </div>
@@ -629,6 +646,8 @@ export function ArchiveApp({ urlParam, onUrlChange }: ArchiveAppProps) {
 }
 
 function TransferPanel({ transfer }: { transfer: DownloadProgressState | null }) {
+  const { track } = useAudioPlayer()
+
   if (!transfer) {
     return null
   }
@@ -642,7 +661,12 @@ function TransferPanel({ transfer }: { transfer: DownloadProgressState | null })
     <div
       role="status"
       aria-live="polite"
-      className="fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-50 rounded-[6px] border border-border bg-popover p-4 shadow-[0_12px_36px_-12px_rgb(0_0_0/0.22)] sm:inset-x-auto sm:right-6 sm:w-[320px]"
+      className={cn(
+        'fixed inset-x-4 z-50 rounded-[6px] border border-border bg-popover p-4 shadow-[0_12px_36px_-12px_rgb(0_0_0/0.22)] sm:inset-x-auto sm:right-6 sm:w-[320px]',
+        track
+          ? 'bottom-[calc(4.75rem+env(safe-area-inset-bottom))]'
+          : 'bottom-[max(1rem,env(safe-area-inset-bottom))]',
+      )}
     >
       <div className="flex items-center gap-3">
         <span className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-muted text-brand">
@@ -845,10 +869,14 @@ function MetaItem({
 }
 
 function EpisodeResult({ episode }: { episode: Episode }) {
+  const player = useAudioPlayer()
   const description = episode.shownotes
     ? htmlToText(episode.shownotes)
     : episode.description
   const paid = isPaid(episode)
+  const playable = !paid && Boolean(episode.audioUrl)
+  const current = player.isCurrent(episode.eid)
+  const isPlaying = current && player.playing
   const audioName = episode.audioUrl ? audioFilename(episode) : ''
   const originalUrl = `https://www.xiaoyuzhoufm.com/episode/${episode.eid}`
 
@@ -948,24 +976,47 @@ function EpisodeResult({ episode }: { episode: Episode }) {
         ) : (
           <span className="inline-flex items-center gap-1 rounded-[3px] bg-brand-muted px-2 py-0.5 text-[11px] font-medium text-brand">
             <Check className="size-3" />
-            可公开下载
+            {playable ? '可在线播放 · 可下载' : '可公开下载'}
           </span>
         )}
       </div>
 
-      <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+      <div className="mt-6 flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
+        {playable ? (
+          <Button
+            onClick={() =>
+              current ? player.toggle() : player.play(playbackTrack(episode))
+            }
+            aria-label={isPlaying ? `暂停 ${episode.title}` : `播放 ${episode.title}`}
+            className="h-10 rounded-[4px] px-3 text-[13px] sm:px-4"
+          >
+            {current && player.loading ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : isPlaying ? (
+              <Pause className="size-4 fill-current" />
+            ) : (
+              <Play className="size-4 fill-current" />
+            )}
+            {isPlaying ? '暂停' : '播放'}
+          </Button>
+        ) : null}
+
         {paid ? (
-          <Button disabled className="h-10 rounded-[4px] px-4 text-[13px]">
+          <Button disabled className="h-10 rounded-[4px] px-3 text-[13px] sm:px-4">
             <Download className="size-4" /> 付费内容不可下载
           </Button>
         ) : episode.audioUrl ? (
-          <Button asChild className="h-10 rounded-[4px] px-4 text-[13px]">
+          <Button
+            asChild
+            variant={playable ? 'outline' : 'default'}
+            className="h-10 rounded-[4px] px-3 text-[13px] sm:px-4"
+          >
             <DownloadLink url={episode.audioUrl} filename={audioName}>
               <Download className="size-4" /> 下载音频
             </DownloadLink>
           </Button>
         ) : (
-          <Button disabled className="h-10 rounded-[4px] px-4 text-[13px]">
+          <Button disabled className="h-10 rounded-[4px] px-3 text-[13px] sm:px-4">
             <Download className="size-4" /> 暂无音频
           </Button>
         )}
@@ -973,7 +1024,7 @@ function EpisodeResult({ episode }: { episode: Episode }) {
         <Button
           asChild
           variant="outline"
-          className="h-10 rounded-[4px] px-4 text-[13px]"
+          className="h-10 rounded-[4px] px-3 text-[13px] sm:px-4"
         >
           <DownloadLink
             url={episode.imageUrl}
@@ -1497,7 +1548,11 @@ function PodcastResult({
 }
 
 function EpisodeRow({ episode }: { episode: Episode }) {
+  const player = useAudioPlayer()
   const paid = isPaid(episode)
+  const playable = !paid && Boolean(episode.audioUrl)
+  const current = player.isCurrent(episode.eid)
+  const isPlaying = current && player.playing
   const blurb = episode.description ? htmlToText(episode.description).trim() : ''
 
   return (
@@ -1527,6 +1582,17 @@ function EpisodeRow({ episode }: { episode: Episode }) {
             <Play className="size-3" />
             {formatCount(episode.playCount)}
           </span>
+          {current ? (
+            <span className="inline-flex items-center gap-1 font-medium text-brand">
+              <span
+                className={cn(
+                  'size-1.5 rounded-full bg-brand',
+                  isPlaying && 'animate-pulse',
+                )}
+              />
+              {isPlaying ? '播放中' : '已暂停'}
+            </span>
+          ) : null}
           {paid ? (
             <span className="font-medium text-destructive">付费 / 受限</span>
           ) : null}
@@ -1534,25 +1600,52 @@ function EpisodeRow({ episode }: { episode: Episode }) {
       </div>
 
       <div className="flex shrink-0 items-center gap-1 self-center">
-        {paid || !episode.audioUrl ? (
+        {playable ? (
+          <button
+            type="button"
+            onClick={() =>
+              current ? player.toggle() : player.play(playbackTrack(episode))
+            }
+            aria-label={
+              isPlaying ? `暂停 ${episode.title}` : `播放 ${episode.title}`
+            }
+            title={isPlaying ? '暂停' : '播放'}
+            className={cn(
+              'grid size-9 place-items-center rounded-full border transition-colors focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none',
+              current
+                ? 'border-brand bg-brand text-brand-foreground hover:bg-brand/90'
+                : 'border-brand/35 text-brand hover:border-brand hover:bg-brand hover:text-brand-foreground',
+            )}
+          >
+            {current && player.loading ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : isPlaying ? (
+              <Pause className="size-4 fill-current" />
+            ) : (
+              <Play className="size-4 fill-current" />
+            )}
+          </button>
+        ) : (
           <span
             className="grid size-9 place-items-center rounded-full border border-border text-muted-foreground/35"
             title="付费或受限内容"
-            aria-label="付费内容不可下载"
+            aria-label="付费内容不可播放或下载"
           >
             <Download className="size-4" />
           </span>
-        ) : (
+        )}
+
+        {!paid && episode.audioUrl ? (
           <DownloadLink
             url={episode.audioUrl}
             filename={audioFilename(episode)}
             aria-label={`下载 ${episode.title} 的音频`}
             title="下载音频"
-            className="grid size-9 place-items-center rounded-full border border-brand/35 text-brand transition-colors hover:border-brand hover:bg-brand hover:text-brand-foreground"
+            className="grid size-9 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <Download className="size-4" />
           </DownloadLink>
-        )}
+        ) : null}
 
         {episode.imageUrl ? (
           <DownloadLink
@@ -1610,9 +1703,9 @@ function HowItWorks() {
         '服务端读取页面内嵌数据，提取音频直链、原图封面、简介与发布时间。',
     },
     {
-      title: '带走文件',
+      title: '试听或带走',
       description:
-        '下载由浏览器直接从 CDN 完成，自动生成“单集 - 播客”文件名。',
+        '先在网页内试听，需要时再下载。文件由浏览器直接从 CDN 保存，自动生成“单集 - 播客”文件名。',
     },
   ]
 

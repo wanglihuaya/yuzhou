@@ -247,6 +247,63 @@
   mask-image: none;
 }
 
+/* ---- Player seek ---------------------------------------------------------
+
+   The scrubber is a full-width, mostly invisible range input laid over the
+   player's top hairline, so the whole width of the bar can be dragged. The
+   sienna thumb only appears on hover or keyboard focus. */
+
+.player-seek {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.player-seek::-webkit-slider-runnable-track {
+  height: 2px;
+  background: transparent;
+}
+
+.player-seek::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 10px;
+  height: 10px;
+  margin-top: -4px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--brand);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.player-seek::-moz-range-track {
+  height: 2px;
+  background: transparent;
+}
+
+.player-seek::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--brand);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.player-seek:hover::-webkit-slider-thumb,
+.player-seek:focus-visible::-webkit-slider-thumb,
+.player-seek:hover::-moz-range-thumb,
+.player-seek:focus-visible::-moz-range-thumb {
+  opacity: 1;
+}
+
+.player-seek:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--brand) 45%, transparent);
+  outline-offset: -2px;
+}
+
 /* ---- Motion ---------------------------------------------------------------
 
    One quiet rise for content that has just arrived, and nothing else. */

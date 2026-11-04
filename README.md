@@ -1,7 +1,8 @@
 # 宇宙备份 · Cosmos Archive
 
-粘贴小宇宙（[xiaoyuzhoufm.com](https://www.xiaoyuzhoufm.com)）的单集或播客链接，解析并下载：
+粘贴小宇宙（[xiaoyuzhoufm.com](https://www.xiaoyuzhoufm.com)）的单集或播客链接，解析、在线播放并下载：
 
+- 单集音频的网页内播放（底部播放器：进度拖动、后退 15 秒 / 前进 30 秒）
 - 单集音频（`mp3` / `m4a` / `wav` / `ogg` / `flac` / `aac` 等）
 - 单集封面原图
 - 播客封面原图
@@ -16,6 +17,8 @@
 PingFang 字体组合，以及蓝绿渐变的星球标志。无需登录小宇宙账号。
 
 > 灵感来自 [LGiki/cosmos-enhanced](https://github.com/LGiki/cosmos-enhanced) 浏览器扩展。本项目把「网页内提取 → 原生下载」的思路迁移到了独立 Web 应用。
+>
+> 源码：[wanglihuaya/yuzhou](https://github.com/wanglihuaya/yuzhou)（MIT）。
 
 ## 快速开始
 
@@ -136,7 +139,8 @@ TanStack Start Server Function  ──►  https://www.xiaoyuzhoufm.com/episode|
 | `public/sw.js` | Service Worker：拦截 `/__cosmos_stream`，把 CDN 响应流交给浏览器下载管理器 |
 | `src/lib/browser.ts` | 下载策略：Service Worker → File System Access → Blob → 直链 |
 | `src/routes/api/download.ts` | 流式下载代理、域名白名单、中文文件名、Range 支持（兜底） |
-| `src/components/ArchiveApp.tsx` | 页面状态、单集/播客视图、批量下载、微信下载提示 |
+| `src/components/ArchiveApp.tsx` | 页面状态、单集/播客视图、播放入口、批量下载、微信下载提示 |
+| `src/components/AudioPlayer.tsx` | 全局播放器：音频状态、进度拖动、±15/30 秒、Media Session、底部播放条 |
 | `src/routes/index.tsx` | `?url=` 搜索参数与首页入口 |
 | `src/styles.css` | Tailwind 入口、纸面横线、封面阴影、show notes 排版 |
 | `src/cosmos-theme.css` | 小宇宙同款主题 tokens 与 shadcn/ui 组件重绘 |
@@ -145,6 +149,7 @@ TanStack Start Server Function  ──►  https://www.xiaoyuzhoufm.com/episode|
 
 ## 实现细节
 
+- **播放**：音频直接由 CDN 流式播放，不经过本站服务器。播放器挂在根布局上，切换页面不会中断；播放状态、进度与音量交给浏览器原生 `<audio>`，并通过 Media Session API 接入系统锁屏 / 媒体键。付费或私有单集不会出现播放入口。
 - **数据来源**：服务端 `fetch` 小宇宙公开网页，解析 `<script id="__NEXT_DATA__">` 中的 `pageProps`，不依赖需要登录的私有 API。
 - **简介与评论**：`shownotes` 是 HTML，先经 `src/lib/sanitize.ts` 白名单过滤（只保留排版标签与 http/https/mailto 链接，丢弃脚本、样式、iframe 等）再渲染为富文本；评论取公开页面内的前 20 条，保留主播 / 置顶标记、点赞数与内嵌回复，评论正文始终按纯文本显示。
 - **缓存**：服务端内存缓存 5 分钟（最多 60 条），避免重复抓取页面。
@@ -157,7 +162,9 @@ TanStack Start Server Function  ──►  https://www.xiaoyuzhoufm.com/episode|
 ## 已知限制
 
 - 播客页的公开 HTML 只包含**最新 15 集**；更多历史单集需要登录小宇宙 App，本项目不会收集账号信息，也不绕过限制。
-- 付费 / 私有单集会显示「付费 / 受限」，不会尝试下载。
+- 付费 / 私有单集会显示「付费 / 受限」，不会尝试播放或下载。
+- 网页内播放依赖音频 CDN 可访问；部分网络环境下可能需要下载后离线收听。
+- 微信内置浏览器可以播放音频，但锁屏或切到后台时可能被系统暂停；保存文件仍需在系统浏览器中打开。
 - 微信内置浏览器不能直接保存文件，需要按页面提示在系统浏览器中打开。
 - iOS Safari 批量下载多个文件时可能逐次询问权限，请选择允许。
 - 小宇宙页面结构调整可能导致解析失败，此时可在服务端日志中查看抓取结果。

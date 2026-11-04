@@ -8,6 +8,7 @@ import type { ReactNode } from 'react'
 
 import Footer from '../components/Footer'
 import Header from '../components/Header'
+import { AudioPlayerProvider } from '../components/AudioPlayer'
 import { AppToaster } from '../components/AppToaster'
 
 import appCss from '../styles.css?url'
@@ -26,12 +27,12 @@ export const Route = createRootRoute({
           'width=device-width, initial-scale=1, viewport-fit=cover',
       },
       {
-        title: '宇宙备份 · 小宇宙音频与封面下载',
+        title: '宇宙备份 · 小宇宙音频播放与下载',
       },
       {
         name: 'description',
         content:
-          '粘贴小宇宙单集或播客链接，解析并下载音频、原图封面与节目简介。无需登录，仅供个人备份。',
+          '粘贴小宇宙单集或播客链接，在线播放并下载音频、原图封面与节目简介。无需登录，仅供个人备份。',
       },
       {
         name: 'theme-color',
@@ -123,9 +124,11 @@ function RootDocument({ children }: { children: ReactNode }) {
         <HeadContent />
       </head>
       <body className="min-h-dvh font-sans antialiased">
-        <Header />
-        {children}
-        <Footer />
+        <AudioPlayerProvider>
+          <Header />
+          {children}
+          <Footer />
+        </AudioPlayerProvider>
         <AppToaster />
         <Scripts />
       </body>

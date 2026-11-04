@@ -1,8 +1,9 @@
 import { Link } from '@tanstack/react-router'
-import { ArrowUpRight, Code2 } from 'lucide-react'
 
 import ThemeToggle from './ThemeToggle'
-import { Brand } from './Logo'
+import { Brand, GithubMark } from './Logo'
+
+const REPO_URL = 'https://github.com/wanglihuaya/yuzhou'
 
 export default function Header() {
   return (
@@ -24,22 +25,23 @@ export default function Header() {
             工作原理
           </a>
           <a
-            href="https://github.com/LGiki/cosmos-enhanced"
+            href={REPO_URL}
             target="_blank"
             rel="noreferrer"
-            className="hidden h-8 items-center gap-1 rounded-[4px] px-2.5 text-[13px] text-muted-foreground no-underline transition-colors hover:bg-muted hover:text-foreground sm:inline-flex"
+            title="在 GitHub 查看源码"
+            className="hidden h-8 items-center gap-1.5 rounded-[4px] px-2.5 text-[13px] text-muted-foreground no-underline transition-colors hover:bg-muted hover:text-foreground sm:inline-flex"
           >
-            灵感来源
-            <ArrowUpRight className="size-3.5" aria-hidden="true" />
+            <GithubMark className="size-[15px]" />
+            GitHub
           </a>
           <a
-            href="https://github.com/LGiki/cosmos-enhanced"
+            href={REPO_URL}
             target="_blank"
             rel="noreferrer"
             className="grid size-9 place-items-center rounded-[4px] text-muted-foreground no-underline transition-colors hover:bg-muted hover:text-foreground sm:hidden"
-            aria-label="查看灵感来源 Cosmos Enhanced"
+            aria-label="在 GitHub 查看源码"
           >
-            <Code2 className="size-4" />
+            <GithubMark className="size-[18px]" />
           </a>
           <ThemeToggle />
         </nav>

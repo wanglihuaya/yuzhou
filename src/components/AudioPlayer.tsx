@@ -24,6 +24,11 @@ import {
 import { toast } from 'sonner'
 
 import { formatDuration } from '@/lib/format'
+import {
+  clearPlaybackProgress,
+  resumePositionFor,
+  savePlaybackProgress,
+} from '@/lib/playback-progress'
 import { cn } from '@/lib/utils'
 
 export interface PlaybackTrack {
@@ -109,6 +114,11 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   const trackRef = useRef<PlaybackTrack | null>(null)
   const queueRef = useRef<PlaybackTrack[]>([])
   const pendingPositionRef = useRef<number | null>(null)
+  /** Throttles localStorage writes while audio is playing. */
+  const lastProgressWriteRef = useRef<{ id: string; at: number }>({
+    id: '',
+    at: 0,
+  })
 
   const [track, setTrack] = useState<PlaybackTrack | null>(null)
   const [playing, setPlaying] = useState(false)
@@ -140,6 +150,45 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
       description: '可以直接下载后离线收听。',
     })
   }, [])
+
+  /** Flush the current position to localStorage. */
+  const persistCurrent = useCallback(() => {
+    const audio = audioRef.current
+    const current = trackRef.current
+    if (!audio || !current) {
+      return
+    }
+
+    const duration =
+      Number.isFinite(audio.duration) && audio.duration > 0
+        ? audio.duration
+        : current.duration
+    savePlaybackProgress(current.id, audio.currentTime, duration)
+    lastProgressWriteRef.current = { id: current.id, at: Date.now() }
+  }, [])
+
+  /** Seek now, or queue the target until metadata arrives. */
+  const seekTo = useCallback(
+    (audio: HTMLAudioElement, position: number, knownDuration = 0) => {
+      const known =
+        Number.isFinite(audio.duration) && audio.duration > 0
+          ? audio.duration
+          : knownDuration
+      const target = Math.max(
+        0,
+        known > 0 ? Math.min(position, known) : position,
+      )
+      // Metadata may still be loading; keep the target for that event.
+      pendingPositionRef.current = audio.readyState < 1 ? target : null
+      try {
+        audio.currentTime = target
+        setCurrentTime(target)
+      } catch {
+        pendingPositionRef.current = target
+      }
+    },
+    [],
+  )
 
   const startPlayback = useCallback(
     (audio: HTMLAudioElement) => {
@@ -191,43 +240,42 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
         commitQueue([...queueRef.current, next])
       }
 
-      if (trackRef.current?.id !== next.id) {
+      const isNewTrack = trackRef.current?.id !== next.id
+
+      if (isNewTrack) {
+        // Save the outgoing episode before its element is reloaded.
+        persistCurrent()
         trackRef.current = next
         setTrack(next)
         setCurrentTime(0)
         setDuration(next.duration || 0)
+        pendingPositionRef.current = null
         audio.src = next.src
         audio.load()
         audio.playbackRate = rate
       }
 
+      const explicitPosition = options?.position
+      // A fresh episode picks up where it was left off, unless a shownote
+      // timestamp explicitly asks for a moment.
+      const resumeAt =
+        isNewTrack && explicitPosition === undefined
+          ? resumePositionFor(next.id, next.duration || 0)
+          : null
+
       startPlayback(audio)
 
-      // Shownote timestamps open the episode at a specific moment. Apply the
-      // position after starting so an ended track does not restart from 0.
-      const position = options?.position
-      pendingPositionRef.current = null
-
-      if (position !== undefined && Number.isFinite(position)) {
-        const known =
-          Number.isFinite(audio.duration) && audio.duration > 0
-            ? audio.duration
-            : (next.duration || 0)
-        const target = Math.max(
-          0,
-          known > 0 ? Math.min(position, known) : position,
-        )
-        // Metadata may still be loading; keep the target for that event.
-        pendingPositionRef.current = audio.readyState < 1 ? target : null
-        try {
-          audio.currentTime = target
-          setCurrentTime(target)
-        } catch {
-          pendingPositionRef.current = target
-        }
+      // Apply after starting so an ended track does not restart from 0.
+      if (explicitPosition !== undefined && Number.isFinite(explicitPosition)) {
+        seekTo(audio, explicitPosition, next.duration || 0)
+      } else if (resumeAt !== null) {
+        seekTo(audio, resumeAt, next.duration || 0)
+        toast(`已从 ${clock(resumeAt)} 继续播放`, {
+          description: next.title,
+        })
       }
     },
-    [rate, startPlayback, commitQueue],
+    [rate, startPlayback, commitQueue, persistCurrent, seekTo],
   )
 
   const enqueue = useCallback(
@@ -321,6 +369,8 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
 
   const close = useCallback(() => {
     const audio = audioRef.current
+    // Closing the bar keeps the spot for the next visit.
+    persistCurrent()
     trackRef.current = null
     queueRef.current = []
 
@@ -344,7 +394,7 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     } catch {
       // Media Session is optional.
     }
-  }, [])
+  }, [persistCurrent])
 
   // A detached <audio> can keep playing if the provider ever unmounts.
   useEffect(() => {
@@ -352,6 +402,25 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
       audioRef.current?.pause()
     }
   }, [])
+
+  // iOS may suspend the page without warning; write the position when the tab
+  // is hidden or the app is closed so the next visit can resume.
+  useEffect(() => {
+    const flush = () => persistCurrent()
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        flush()
+      }
+    }
+
+    window.addEventListener('pagehide', flush)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+
+    return () => {
+      window.removeEventListener('pagehide', flush)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [persistCurrent])
 
   // What the lock screen and hardware media keys show while a track plays.
   useEffect(() => {
@@ -495,12 +564,38 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
             setDuration(audio.duration)
           }
         }}
-        onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+        onTimeUpdate={(event) => {
+          const audio = event.currentTarget
+          setCurrentTime(audio.currentTime)
+
+          const current = trackRef.current
+          if (!current) {
+            return
+          }
+
+          // localStorage writes are synchronous; every timeupdate would stall
+          // playback. Five seconds is fine-grained enough for a resume point.
+          const now = Date.now()
+          const last = lastProgressWriteRef.current
+          if (last.id !== current.id || now - last.at >= 5000) {
+            savePlaybackProgress(
+              current.id,
+              audio.currentTime,
+              Number.isFinite(audio.duration) && audio.duration > 0
+                ? audio.duration
+                : current.duration,
+            )
+            lastProgressWriteRef.current = { id: current.id, at: now }
+          }
+        }}
         onPlay={() => {
           setPlaying(true)
           setLoading(false)
         }}
-        onPause={() => setPlaying(false)}
+        onPause={() => {
+          setPlaying(false)
+          persistCurrent()
+        }}
         onWaiting={() => setLoading(true)}
         onPlaying={() => setLoading(false)}
         onCanPlay={() => setLoading(false)}
@@ -511,6 +606,12 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
             ? list.findIndex((item) => item.id === current.id)
             : -1
           const next = index >= 0 ? list[index + 1] : undefined
+
+          // A finished episode should start from the beginning next time.
+          if (current) {
+            clearPlaybackProgress(current.id)
+            lastProgressWriteRef.current = { id: '', at: 0 }
+          }
 
           if (next) {
             play(next)

@@ -459,8 +459,9 @@ export function ArchiveApp({ urlParam, onUrlChange }: ArchiveAppProps) {
     <main className="relative w-full pb-[max(3rem,env(safe-area-inset-bottom))]">
       <div className="paper-band" aria-hidden="true" />
 
+      {inWeChat ? <WeChatNotice onCopy={copyPageLink} /> : null}
+
       <div className="relative mx-auto w-full max-w-[980px] px-5 pt-8 sm:px-6 sm:pt-10">
-        {inWeChat ? <WeChatNotice onCopy={copyPageLink} /> : null}
 
         <section className="animate-rise">
           <div className="mx-auto max-w-[640px] text-center">
@@ -718,27 +719,29 @@ function WeChatNotice({
     typeof window !== 'undefined' ? window.location.href : ''
 
   return (
-    <div className="mb-6 flex flex-col gap-2.5 rounded-[6px] border-l-2 border-brand bg-brand-muted px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-      <div className="min-w-0 flex-1">
-        <p className="text-[13px] font-semibold">微信内无法直接保存文件</p>
-        <p className="mt-0.5 text-[12px] leading-5 text-muted-foreground">
-          点右上角 ···，选择「在浏览器打开」，再回到本页下载。
+    <div className="border-b border-brand/15 bg-brand-muted/70">
+      <div className="mx-auto flex w-full max-w-[980px] items-center gap-2 px-5 py-1.5 sm:px-6">
+        <p className="min-w-0 flex-1 truncate text-[11px] leading-4 text-muted-foreground">
+          <span className="font-medium text-foreground">
+            微信内无法直接保存文件
+          </span>
+          ，点右上角 ··· 用浏览器打开
         </p>
+        <InlineCitation title="本页链接" url={pageUrl}>
+          <button
+            type="button"
+            onClick={async () => {
+              const copied = await onCopy()
+              if (copied) {
+                setDismissed(true)
+              }
+            }}
+            className="shrink-0 rounded-[3px] px-1.5 py-0.5 text-[11px] font-medium text-brand transition-colors hover:bg-background/70"
+          >
+            复制链接
+          </button>
+        </InlineCitation>
       </div>
-      <InlineCitation title="本页链接" url={pageUrl}>
-        <button
-          type="button"
-          onClick={async () => {
-            const copied = await onCopy()
-            if (copied) {
-              setDismissed(true)
-            }
-          }}
-          className="shrink-0 self-start rounded-[4px] bg-background/80 px-3 py-1.5 text-[12px] font-medium text-brand transition-colors hover:bg-background sm:self-auto"
-        >
-          复制本页链接
-        </button>
-      </InlineCitation>
     </div>
   )
 }

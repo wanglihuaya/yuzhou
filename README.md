@@ -15,6 +15,8 @@
 - 首页热榜：没有任何链接时展示近期热门单集，点击即可解析
 - 搜索：顶部搜索框或 `⌘K` / `Ctrl K` 打开命令面板，按关键词搜索单集并直接解析
 - 本地收藏与历史：桌面端右侧浮动栏（可收起、内部滚动）、移动端右上角抽屉，收藏播客或回看打开过的内容
+- PWA：可添加到主屏幕并独立窗口启动；Service Worker 缓存名带构建版本号，发版后提示更新并清空旧缓存
+- 分享卡片：单集/播客路径与 `?url=` 链接被社交平台抓取时，服务端按标题与封面生成 1200×630 的 OG 图
 
 基于 **TanStack Start**（React 19 + Vite）、**shadcn/ui** 与 **Base UI**（播放器抽屉的 snap point）构建，界面参照
 [小宇宙单集页](https://www.xiaoyuzhoufm.com/episode/6ae876cf97726cd4675b98f1) 的视觉语言：
@@ -134,6 +136,46 @@ HSTS 预加载列表中，别名必须始终使用 HTTPS。
 - 可以复制本页链接或单个下载地址，粘贴到 Safari / 系统浏览器后继续下载。
 - 批量下载同样会被拦截并给出说明，不会静默失败。
 
+## PWA 与发版缓存
+
+- `public/manifest.json` 提供应用名称、图标与 `standalone` 启动方式，
+  图标由 `public/favicon.svg` 生成（192 / 512 / maskable，iOS 另用
+  `apple-touch-icon`）。
+- `public/sw.js` 同时负责 CDN 流式下载与 PWA 缓存。构建时 `vite.config.ts`
+  会把「包版本-时间戳」写入 `BUILD_ID`，缓存名形如
+  `yuzhou-static-0.0.4-<build>`，每次发版都是全新的缓存桶。
+- 页面导航始终**网络优先**，保证发版后拿到新的 HTML；`/assets/` 带内容哈希，
+  使用 cache-first；图标与 manifest 使用 stale-while-revalidate；
+  `/_serverFn/`、`/api/`、下载流与 `sw.js` 本身不进入缓存。
+- 新 worker 安装后先等待，页面弹出「新版本已就绪」；用户点刷新后发送
+  `SKIP_WAITING`，新 worker 激活时删除所有旧版本缓存。这样既不会在用户
+  听音频时强制刷新，也不会长期停留在旧版本。
+- 注册时使用 `updateViaCache: 'none'`，并在标签页回到前台时每 15 分钟检查
+  一次，避免浏览器 HTTP 缓存拖住 `sw.js` 的更新。
+- 开发环境（`BUILD_ID` 未被替换）不启用任何缓存，只保留流式下载，避免 HMR
+  读到旧资源。
+
+## 分享卡片（OG Image）
+
+社交平台抓取链接时不会执行 JavaScript，因此 `/episode/<id>`、`/podcast/<id>`
+与带 `?url=` 的首页会在 SSR 阶段识别常见爬虫（Twitter、Telegram、Slack、
+Discord、微信等）的 UA，完成一次解析后输出 `og:*` / `twitter:*` 标签。普通
+访问者不触发额外的上游请求，仍走原有的客户端解析流程。
+
+- 分享图使用 [ogimagecn](https://www.ogimagecn.com/docs) 的 `photo` / `simple`
+  组件（Satori JSX）排版：`src/server/og.tsx` 先用 `satori` 生成 SVG，再用
+  `@resvg/resvg-wasm` 栅格化为 1200×630 PNG，不依赖原生二进制。
+- 中文字形需要 CJK 字体：`src/assets/fonts/noto-sans-sc-{400,700}.woff` 是
+  简体子集（各约 1.5 MB），构建时内联进只在服务端加载的 chunk。
+- 封面由服务端下载后以 data URI 交给 Satori，只允许 `*.xyzcdn.net` 与
+  `*.xiaoyuzhoufm.com`，避免分享图接口变成开放代理；取图失败时回退到品牌渐变。
+- 图片按查询参数做进程内 LRU 缓存，响应带
+  `Cache-Control: public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800`。
+- SSR 输出对爬虫和普通访问者不同，响应会带上 `Vary: User-Agent`，避免中间缓存
+  把两份 HTML 混用。
+- 绝对地址默认使用 `https://www.xiaoyuzhoufm.dev`；部署到其他域名时在构建时
+  设置 `VITE_SITE_URL=https://example.com`。
+
 ## 界面风格（小宇宙同款）
 
 界面不依赖第三方主题包，而是照着[小宇宙单集页](https://www.xiaoyuzhoufm.com/episode/6ae876cf97726cd4675b98f1)
@@ -203,9 +245,16 @@ TanStack Start Server Function  ──►  https://www.xiaoyuzhoufm.com/episode|
 | --- | --- |
 | `src/lib/xiaoyuzhou.ts` | 链接解析、页面抓取、`__NEXT_DATA__` 提取、数据归一化、文件名生成 |
 | `src/lib/sanitize.ts` | 无依赖的白名单 HTML 过滤器：showednotes 富文本安全渲染 |
-| `public/sw.js` | Service Worker：拦截 `/__cosmos_stream`，把 CDN 响应流交给浏览器下载管理器 |
+| `public/sw.js` | Service Worker：CDN 流式下载 + PWA 缓存（按构建版本分桶、安装等待、旧缓存清理） |
+| `public/manifest.json` | PWA 清单：名称、图标、`standalone` 启动方式 |
+| `vite.config.ts` | 构建时把版本号与时间戳写入 `sw.js` 的 `BUILD_ID` |
 | `src/lib/browser.ts` | 下载策略：Service Worker → File System Access → Blob → 直链 |
 | `src/routes/api/download.ts` | 流式下载代理、域名白名单、中文文件名、Range 支持（兜底） |
+| `src/routes/api/og.ts` | 分享图接口：参数清洗、PNG 响应与缓存头 |
+| `src/server/og.tsx` | Satori + resvg-wasm 渲染：字体、封面内联、LRU 缓存 |
+| `src/lib/share-meta.ts` | 爬虫识别、解析结果 → OG 元数据、SSR `head` 标签 |
+| `src/components/og/*` | ogimagecn 的 `photo` / `simple` 分享图组件 |
+| `src/assets/fonts/*` | Noto Sans SC 简体子集（OG 图中文排版） |
 | `src/components/ArchiveApp.tsx` | 页面状态、单集/播客视图、播放入口、收藏、批量下载、微信下载提示 |
 | `src/components/AudioPlayer.tsx` | 全局播放器：底部播放条、Base UI Drawer 播放器 / 队列抽屉、倍速、播放队列、Media Session |
 | `src/components/LibraryProvider.tsx` | 收藏与历史状态、`localStorage` 读写、侧边栏开关 |

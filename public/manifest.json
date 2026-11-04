@@ -1,0 +1,35 @@
+{
+  "id": "/",
+  "name": "宇宙备份 · 小宇宙音频播放与下载",
+  "short_name": "宇宙备份",
+  "description": "粘贴小宇宙单集或播客链接，在线播放并下载音频、原图封面与节目简介。",
+  "lang": "zh-CN",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#ffffff",
+  "theme_color": "#0a7ca0",
+  "categories": ["entertainment", "music", "productivity"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

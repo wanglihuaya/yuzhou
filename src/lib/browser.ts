@@ -1,3 +1,5 @@
+import { toast } from 'sonner'
+
 import {
   clearDownloadProgress,
   finishDownloadProgress,
@@ -47,13 +49,96 @@ function streamHref(url: string, filename: string): string {
   )}&filename=${encodeURIComponent(filename)}`
 }
 
+const UPDATE_CHECK_INTERVAL = 15 * 60_000
+
 /** Register the streaming service worker once the page is interactive. */
 export function registerServiceWorker(): void {
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
     return
   }
-  void navigator.serviceWorker.register('/sw.js').catch(() => {
-    // Streaming downloads are an enhancement; ignore registration failures.
+
+  void navigator.serviceWorker
+    .register('/sw.js', { scope: '/', updateViaCache: 'none' })
+    .then((registration) => {
+      // A new worker can already be waiting when this page is a returning tab.
+      if (navigator.serviceWorker.controller && registration.waiting) {
+        promptServiceWorkerUpdate(registration)
+      }
+
+      registration.addEventListener('updatefound', () => {
+        const installing = registration.installing
+        if (!installing) {
+          return
+        }
+
+        installing.addEventListener('statechange', () => {
+          if (
+            installing.state === 'installed' &&
+            navigator.serviceWorker.controller
+          ) {
+            promptServiceWorkerUpdate(registration)
+          }
+        })
+      })
+
+      // Check for a new deploy when the tab comes back to the foreground,
+      // at most once every 15 minutes.
+      let lastCheck = Date.now()
+      const check = () => {
+        if (document.visibilityState !== 'visible') {
+          return
+        }
+        if (Date.now() - lastCheck < UPDATE_CHECK_INTERVAL) {
+          return
+        }
+        lastCheck = Date.now()
+        void registration.update().catch(() => {})
+      }
+
+      document.addEventListener('visibilitychange', check)
+      window.addEventListener('focus', check)
+    })
+    .catch(() => {
+      // Streaming downloads are an enhancement; ignore registration failures.
+    })
+}
+
+let updatePrompted = false
+
+/**
+ * The new worker waits until the user agrees, so the current page keeps its
+ * build's chunks (and any playing audio) intact a little longer. Once they
+ * refresh, the new worker activates and clears every old cache.
+ */
+function promptServiceWorkerUpdate(
+  registration: ServiceWorkerRegistration,
+): void {
+  if (updatePrompted) {
+    return
+  }
+  updatePrompted = true
+
+  toast('新版本已就绪', {
+    id: 'service-worker-update',
+    description: '刷新页面即可使用最新版本。',
+    duration: Infinity,
+    action: {
+      label: '刷新',
+      onClick: () => {
+        const waiting = registration.waiting
+        if (!waiting) {
+          window.location.reload()
+          return
+        }
+
+        navigator.serviceWorker.addEventListener(
+          'controllerchange',
+          () => window.location.reload(),
+          { once: true },
+        )
+        waiting.postMessage({ type: 'SKIP_WAITING' })
+      },
+    },
   })
 }
 
@@ -70,7 +155,10 @@ async function ensureServiceWorker(timeoutMs = 2_500): Promise<boolean> {
   }
 
   try {
-    await navigator.serviceWorker.register('/sw.js')
+    await navigator.serviceWorker.register('/sw.js', {
+      scope: '/',
+      updateViaCache: 'none',
+    })
   } catch {
     return false
   }

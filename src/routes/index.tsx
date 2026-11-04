@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 
 import { ArchiveApp } from '@/components/ArchiveApp'
+import { loaderShareMeta, shareHead } from '@/lib/share-meta'
 
 export const Route = createFileRoute('/')({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -9,6 +10,9 @@ export const Route = createFileRoute('/')({
         ? search.url.trim()
         : undefined,
   }),
+  loaderDeps: ({ search }) => ({ url: search.url }),
+  loader: ({ deps }) => loaderShareMeta(deps.url),
+  head: ({ loaderData }) => shareHead(loaderData),
   component: HomePage,
 })
 

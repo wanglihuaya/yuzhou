@@ -15,8 +15,16 @@ import {
   DesktopLibrarySidebar,
   MobileLibrarySheet,
 } from '../components/LibrarySidebar'
+import {
+  SITE_DESCRIPTION,
+  SITE_NAME,
+  SITE_TITLE,
+  SITE_URL,
+} from '../lib/site'
 
 import appCss from '../styles.css?url'
+
+const OG_IMAGE = `${SITE_URL}/api/og`
 
 const THEME_INIT_SCRIPT = `(function(){try{var stored=window.localStorage.getItem('theme');var mode=(stored==='light'||stored==='dark'||stored==='auto')?stored:'auto';var prefersDark=window.matchMedia('(prefers-color-scheme: dark)').matches;var resolved=mode==='auto'?(prefersDark?'dark':'light'):mode;var root=document.documentElement;root.classList.remove('light','dark');root.classList.add(resolved);if(mode==='auto'){root.removeAttribute('data-theme')}else{root.setAttribute('data-theme',mode)}root.style.colorScheme=resolved;}catch(e){}})();`
 
@@ -32,12 +40,67 @@ export const Route = createRootRoute({
           'width=device-width, initial-scale=1, viewport-fit=cover',
       },
       {
-        title: '宇宙备份 · 小宇宙音频播放与下载',
+        title: SITE_TITLE,
       },
       {
         name: 'description',
-        content:
-          '粘贴小宇宙单集或播客链接，在线播放并下载音频、原图封面与节目简介。无需登录，仅供个人备份。',
+        content: SITE_DESCRIPTION,
+      },
+      {
+        property: 'og:type',
+        content: 'website',
+      },
+      {
+        property: 'og:title',
+        content: SITE_TITLE,
+      },
+      {
+        property: 'og:description',
+        content: SITE_DESCRIPTION,
+      },
+      {
+        property: 'og:url',
+        content: SITE_URL,
+      },
+      {
+        property: 'og:site_name',
+        content: SITE_NAME,
+      },
+      {
+        property: 'og:locale',
+        content: 'zh_CN',
+      },
+      {
+        property: 'og:image',
+        content: OG_IMAGE,
+      },
+      {
+        property: 'og:image:width',
+        content: '1200',
+      },
+      {
+        property: 'og:image:height',
+        content: '630',
+      },
+      {
+        property: 'og:image:alt',
+        content: SITE_TITLE,
+      },
+      {
+        name: 'twitter:card',
+        content: 'summary_large_image',
+      },
+      {
+        name: 'twitter:title',
+        content: SITE_TITLE,
+      },
+      {
+        name: 'twitter:description',
+        content: SITE_DESCRIPTION,
+      },
+      {
+        name: 'twitter:image',
+        content: OG_IMAGE,
       },
       {
         name: 'theme-color',
@@ -75,6 +138,15 @@ export const Route = createRootRoute({
         rel: 'icon',
         href: '/favicon.svg',
         type: 'image/svg+xml',
+      },
+      {
+        rel: 'apple-touch-icon',
+        href: '/icons/apple-touch-icon.png',
+        sizes: '180x180',
+      },
+      {
+        rel: 'manifest',
+        href: '/manifest.json',
       },
       {
         rel: 'stylesheet',
@@ -124,6 +196,16 @@ function RootDocument({ children }: { children: ReactNode }) {
           defer
           src="https://analyse.commands.top/recorder.js"
           data-website-id="f0b412f9-8fe3-4d43-9889-9cd0e7316857"
+        />
+        <script
+          defer
+          src="https://analyse.commands.top/script.js"
+          data-website-id="e9b8f8b7-14b1-4cca-bf45-28f9d641a39f"
+        />
+        <script
+          defer
+          src="https://analyse.commands.top/recorder.js"
+          data-website-id="e9b8f8b7-14b1-4cca-bf45-28f9d641a39f"
         />
       </head>
       <body className="flex min-h-dvh flex-col font-sans antialiased">

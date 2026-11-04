@@ -18,5 +18,7 @@
     "hooks": "@/hooks"
   },
   "iconLibrary": "lucide",
-  "registries": {}
+  "registries": {
+    "@ogimagecn": "https://www.ogimagecn.com/r/{name}.json"
+  }
 }

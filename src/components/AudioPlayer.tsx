@@ -711,10 +711,6 @@ function AudioPlayerBar() {
       >
         <div className="relative isolate">
           <div
-            className="paper-band paper-band-player -z-10"
-            aria-hidden="true"
-          />
-          <div
             className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-border"
             aria-hidden="true"
           />

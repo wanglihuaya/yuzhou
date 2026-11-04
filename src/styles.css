@@ -71,25 +71,6 @@
   );
 }
 
-/* The fixed player borrows the same ruled paper, mirrored so the lines sit
-   behind the controls and dissolve before they reach the top edge. */
-.paper-band-player {
-  height: 100%;
-  background-position: 0 0;
-  -webkit-mask-image: linear-gradient(
-    to top,
-    rgb(0 0 0 / 100%) 0%,
-    rgb(0 0 0 / 80%) 65%,
-    rgb(0 0 0 / 0%) 100%
-  );
-  mask-image: linear-gradient(
-    to top,
-    rgb(0 0 0 / 100%) 0%,
-    rgb(0 0 0 / 80%) 65%,
-    rgb(0 0 0 / 0%) 100%
-  );
-}
-
 /* A hairline that starts and ends in nothing, for section transitions that
    should not run the full width of the page. */
 .hairline-fade {

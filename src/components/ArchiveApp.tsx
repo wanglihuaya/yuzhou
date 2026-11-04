@@ -807,7 +807,7 @@ function StickyMediaBar({
     <div
       aria-hidden={!visible}
       className={cn(
-        'fixed inset-x-0 z-40 border-b border-border bg-background/90 backdrop-blur-xl backdrop-saturate-150 transition-[opacity,transform] duration-200 ease-out',
+        'fixed inset-x-0 z-40 border-b border-border bg-background/65 backdrop-blur-xl backdrop-saturate-150 transition-[opacity,transform] duration-200 ease-out',
         // The header is 57px tall, 61px from `sm` up, plus the iOS safe area.
         'top-[calc(57px+env(safe-area-inset-top,0px))] sm:top-[calc(61px+env(safe-area-inset-top,0px))]',
         visible

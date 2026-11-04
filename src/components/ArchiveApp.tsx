@@ -9,7 +9,9 @@ import {
   type KeyboardEvent,
   type MouseEvent,
   type ReactNode,
+  type RefObject,
 } from 'react'
+import { Link } from '@tanstack/react-router'
 import {
   AlertCircle,
   Calendar,
@@ -227,11 +229,14 @@ export function ArchiveApp({ urlParam, onUrlChange }: ArchiveAppProps) {
   const [wechatHint, setWechatHint] = useState<WeChatHintState>({
     open: false,
   })
+  const [showStickyBar, setShowStickyBar] = useState(false)
 
   const requestSeq = useRef(0)
   const lastResolved = useRef<string | null>(null)
   const resultRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
+  /** The episode/podcast title, used to tell when the hero has scrolled away. */
+  const identityRef = useRef<HTMLHeadingElement | null>(null)
   const transfer = useSyncExternalStore(
     subscribeDownloadProgress,
     getDownloadProgress,
@@ -254,6 +259,46 @@ export function ArchiveApp({ urlParam, onUrlChange }: ArchiveAppProps) {
       window.removeEventListener(WECHAT_BLOCKED_EVENT, onBlocked)
     }
   }, [])
+
+  // Show a compact sticky header once the cover and title have scrolled under
+  // the fixed header, so the page keeps saying which episode/podcast it is.
+  useEffect(() => {
+    if (status !== 'ready' || !result) {
+      setShowStickyBar(false)
+      return
+    }
+
+    let frame = 0
+    const header = document.querySelector('header')
+
+    const update = () => {
+      frame = 0
+      const identity = identityRef.current
+      if (!identity) {
+        setShowStickyBar(false)
+        return
+      }
+      const threshold = header?.getBoundingClientRect().bottom ?? 0
+      setShowStickyBar(identity.getBoundingClientRect().bottom <= threshold)
+    }
+
+    const schedule = () => {
+      if (!frame) {
+        frame = window.requestAnimationFrame(update)
+      }
+    }
+
+    update()
+    window.addEventListener('scroll', schedule, { passive: true })
+    window.addEventListener('resize', schedule)
+    return () => {
+      if (frame) {
+        window.cancelAnimationFrame(frame)
+      }
+      window.removeEventListener('scroll', schedule)
+      window.removeEventListener('resize', schedule)
+    }
+  }, [status, result])
 
   useEffect(() => {
     if (!result) {
@@ -311,7 +356,25 @@ export function ArchiveApp({ urlParam, onUrlChange }: ArchiveAppProps) {
   )
 
   useEffect(() => {
-    if (!urlParam || lastResolved.current === urlParam) {
+    if (!urlParam) {
+      // Back on the bare home page (logo click or a cleared search): drop the
+      // previous result so the hot list -- not the last parsed item -- shows.
+      const wasShowingResult =
+        lastResolved.current !== null || requestSeq.current > 0
+      lastResolved.current = null
+      requestSeq.current += 1
+      setInput('')
+      setResult(null)
+      setError('')
+      setStatus('idle')
+      setBatch(null)
+      if (wasShowingResult) {
+        window.scrollTo({ top: 0, behavior: 'auto' })
+      }
+      return
+    }
+
+    if (lastResolved.current === urlParam) {
       return
     }
     lastResolved.current = urlParam
@@ -461,6 +524,27 @@ export function ArchiveApp({ urlParam, onUrlChange }: ArchiveAppProps) {
 
       {inWeChat ? <WeChatNotice onCopy={copyPageLink} /> : null}
 
+      {status === 'ready' && result ? (
+        <StickyMediaBar
+          visible={showStickyBar}
+          title={
+            result.kind === 'episode'
+              ? result.episode.title
+              : result.podcast.title
+          }
+          subtitle={
+            result.kind === 'episode'
+              ? result.episode.podcast.title
+              : result.podcast.author || '播客'
+          }
+          image={
+            result.kind === 'episode'
+              ? result.episode.imageUrl
+              : result.podcast.imageUrl
+          }
+        />
+      ) : null}
+
       <div className="relative mx-auto w-full max-w-[980px] px-5 pt-8 sm:px-6 sm:pt-10">
 
         <section className="animate-rise">
@@ -601,7 +685,10 @@ export function ArchiveApp({ urlParam, onUrlChange }: ArchiveAppProps) {
             <div className="mt-12 animate-rise sm:mt-14">
               {result.kind === 'episode' ? (
                 <>
-                  <EpisodeResult episode={result.episode} />
+                  <EpisodeResult
+                    episode={result.episode}
+                    identityRef={identityRef}
+                  />
                   <EpisodeShownotes
                     episode={result.episode}
                     shownotes={result.episode.shownotes}
@@ -618,6 +705,7 @@ export function ArchiveApp({ urlParam, onUrlChange }: ArchiveAppProps) {
                   episodes={result.episodes}
                   hasMore={result.hasMore}
                   batch={batch}
+                  identityRef={identityRef}
                   onDownloadAllAudio={() =>
                     void runAudioBatch(result.episodes, result.podcast.title)
                   }
@@ -704,22 +792,59 @@ function TransferPanel({ transfer }: { transfer: DownloadProgressState | null })
   )
 }
 
+function StickyMediaBar({
+  visible,
+  title,
+  subtitle,
+  image,
+}: {
+  visible: boolean
+  title: string
+  subtitle: string
+  image: string
+}) {
+  return (
+    <div
+      aria-hidden={!visible}
+      className={cn(
+        'fixed inset-x-0 z-40 border-b border-border bg-background/90 backdrop-blur-xl backdrop-saturate-150 transition-[opacity,transform] duration-200 ease-out',
+        // The header is 57px tall, 61px from `sm` up, plus the iOS safe area.
+        'top-[calc(57px+env(safe-area-inset-top,0px))] sm:top-[calc(61px+env(safe-area-inset-top,0px))]',
+        visible
+          ? 'translate-y-0 opacity-100'
+          : 'pointer-events-none -translate-y-1.5 opacity-0',
+      )}
+    >
+      <div className="mx-auto flex w-full max-w-[980px] items-center gap-3 px-5 py-2 sm:px-6">
+        <Cover
+          src={image}
+          alt=""
+          className="size-10 shrink-0 rounded-[4px]"
+        />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[13px] leading-5 font-medium text-foreground">
+            {title}
+          </p>
+          <p className="truncate text-[11px] leading-4 text-muted-foreground">
+            {subtitle}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function WeChatNotice({
   onCopy,
 }: {
   onCopy: () => Promise<boolean>
 }) {
-  const [dismissed, setDismissed] = useState(false)
-
-  if (dismissed) {
-    return null
-  }
-
   const pageUrl =
     typeof window !== 'undefined' ? window.location.href : ''
 
   return (
-    <div className="border-b border-brand/15 bg-brand-muted/70">
+    // Sits above the ruled-paper background, which is a positioned layer.
+    <div className="relative z-10 border-b border-brand/15 bg-brand-muted">
       <div className="mx-auto flex w-full max-w-[980px] items-center gap-2 px-5 py-1.5 sm:px-6">
         <p className="min-w-0 flex-1 truncate text-[11px] leading-4 text-muted-foreground">
           <span className="font-medium text-foreground">
@@ -730,12 +855,7 @@ function WeChatNotice({
         <InlineCitation title="本页链接" url={pageUrl}>
           <button
             type="button"
-            onClick={async () => {
-              const copied = await onCopy()
-              if (copied) {
-                setDismissed(true)
-              }
-            }}
+            onClick={() => void onCopy()}
             className="shrink-0 rounded-[3px] px-1.5 py-0.5 text-[11px] font-medium text-brand transition-colors hover:bg-background/70"
           >
             复制链接
@@ -856,7 +976,13 @@ function MetaItem({
   )
 }
 
-function EpisodeResult({ episode }: { episode: Episode }) {
+function EpisodeResult({
+  episode,
+  identityRef,
+}: {
+  episode: Episode
+  identityRef?: RefObject<HTMLHeadingElement | null>
+}) {
   const player = useAudioPlayer()
   const { favorites, toggleFavorite } = useLibrary()
   const description = episode.shownotes
@@ -929,7 +1055,10 @@ function EpisodeResult({ episode }: { episode: Episode }) {
         原图封面 · {episode.imageExt.toUpperCase()}
       </p>
 
-      <h2 className="mx-auto mt-3 max-w-[560px] font-heading text-[22px] leading-[1.4] font-bold tracking-[-0.01em] text-balance text-foreground sm:text-[26px]">
+      <h2
+        ref={identityRef}
+        className="mx-auto mt-3 max-w-[560px] font-heading text-[22px] leading-[1.4] font-bold tracking-[-0.01em] text-balance text-foreground sm:text-[26px]"
+      >
         {episode.title}
       </h2>
 
@@ -1472,6 +1601,7 @@ function PodcastResult({
   episodes,
   hasMore,
   batch,
+  identityRef,
   onDownloadAllAudio,
   onDownloadAllCovers,
 }: {
@@ -1479,6 +1609,7 @@ function PodcastResult({
   episodes: Episode[]
   hasMore: boolean
   batch: 'audio' | 'cover' | null
+  identityRef?: RefObject<HTMLHeadingElement | null>
   onDownloadAllAudio: () => void
   onDownloadAllCovers: () => void
 }) {
@@ -1538,7 +1669,10 @@ function PodcastResult({
           播客封面原图 · {podcast.imageExt.toUpperCase()}
         </p>
 
-        <h2 className="mx-auto mt-3 max-w-[560px] font-heading text-[24px] leading-[1.35] font-bold tracking-[-0.01em] text-balance text-foreground sm:text-[30px]">
+        <h2
+          ref={identityRef}
+          className="mx-auto mt-3 max-w-[560px] font-heading text-[24px] leading-[1.35] font-bold tracking-[-0.01em] text-balance text-foreground sm:text-[30px]"
+        >
           {podcast.title}
         </h2>
 
@@ -1746,7 +1880,16 @@ function EpisodeRow({ episode }: { episode: Episode }) {
   }
 
   return (
-    <div className="group flex gap-3.5 border-b border-border py-5 last:border-b-0 sm:gap-4">
+    <div className="group relative flex gap-3.5 border-b border-border py-5 transition-colors last:border-b-0 hover:bg-muted/25 sm:gap-4">
+      {episode.eid ? (
+        <Link
+          to="/episode/$eid"
+          params={{ eid: episode.eid }}
+          aria-label={`查看单集：${episode.title}`}
+          className="absolute inset-0 z-0 rounded-[4px] focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-inset focus-visible:outline-none"
+        />
+      ) : null}
+
       <Cover
         src={episode.imageUrl}
         alt=""
@@ -1754,7 +1897,7 @@ function EpisodeRow({ episode }: { episode: Episode }) {
       />
 
       <div className="min-w-0 flex-1">
-        <p className="line-clamp-2 text-[15px] leading-[1.5] font-medium text-foreground">
+        <p className="line-clamp-2 text-[15px] leading-[1.5] font-medium text-foreground transition-colors group-hover:text-brand">
           {episode.title}
         </p>
         {blurb ? (
@@ -1789,7 +1932,7 @@ function EpisodeRow({ episode }: { episode: Episode }) {
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-1 self-center">
+      <div className="pointer-events-none relative z-10 flex shrink-0 items-center gap-1 self-center [&_a]:pointer-events-auto [&_button]:pointer-events-auto">
         {playable ? (
           <button
             type="button"

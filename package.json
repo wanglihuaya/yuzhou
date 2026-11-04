@@ -9,6 +9,7 @@
     "dev": "vite dev --port 3000",
     "generate-routes": "vite build",
     "build": "vite build",
+    "start": "srvx serve --prod --entry dist/server/server.js --static ../client",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -30,12 +30,16 @@ pnpm dev
 
 默认打开 `http://localhost:3000`（端口被占用时 Vite 会自动换一个）。
 
-生产构建：
+生产构建与启动：
 
 ```bash
 pnpm build
-pnpm preview
+pnpm start
 ```
+
+`pnpm start` 用 `srvx` 以生产模式运行 `dist/server/server.js`，并把
+`dist/client` 作为静态资源目录，默认监听 `3000` 端口（用
+`pnpm start --port 8080` 可换端口）。只做本地预览时也可以运行 `pnpm preview`。
 
 要求 Node.js 20+、pnpm 10+。
 
@@ -44,7 +48,7 @@ pnpm preview
 - 单集页面：`https://www.xiaoyuzhoufm.com/episode/<24 位 ID>`
 - 播客页面：`https://www.xiaoyuzhoufm.com/podcast/<24 位 ID>`
 - 路径直达：`<本站>/episode/<24 位 ID>` 或 `<本站>/podcast/<24 位 ID>`
-- 镜像域名：把上面的 `www.xiaoyuzhoufm.com` 换成 `www.xiaoyuzhoufm.dev` 即可
+- 别名域名：把上面的 `www.xiaoyuzhoufm.com` 换成 `www.xiaoyuzhoufm.dev` 即可
 - 直接输入 24 位 ID：会先按单集解析，找不到再按播客解析
 - 从小宇宙 App 复制的分享文案：会自动提取其中的链接
 
@@ -56,21 +60,42 @@ pnpm preview
 解析结果会写入地址栏的 `?url=` 参数，方便直接分享或刷新恢复；通过
 `/episode/<id>`、`/podcast/<id>` 打开时则保留路径。
 
-## 镜像域名（xiaoyuzhoufm.dev）
+## 自定义域名（xiaoyuzhoufm.dev）
 
-`www.xiaoyuzhoufm.dev` 是同一个应用的反向代理入口，由
-[`cloudflare/`](cloudflare/) 里的 Cloudflare Worker 实现：
+`xiaoyuzhoufm.dev` 不是另一个应用，而是同一份 Node 部署的别名：把域名解析到
+同一台服务器后，`www.xiaoyuzhoufm.com` → `www.xiaoyuzhoufm.dev` 的链接会落到
+相同的路由（`/episode/<id>`、`/podcast/<id>`），解析、播放、下载与评论完全一致。
 
-- 访问 `https://www.xiaoyuzhoufm.dev/episode/<id>` 或
-  `.../podcast/<id>`，Worker 把请求转发到主站，地址栏保留
-  `/episode/<id>` 路径，解析、播放、下载、评论与主站完全一致。
-- 主站的代码、DNS 与证书不受影响；只新增 Worker 域名。
-- 别名页响应带 `X-Robots-Tag: noindex`，不参与搜索引擎收录。
-- 页面、静态资源、`/api/*`、`/sw.js` 都经 Worker 转发；播放器与流式下载仍由
-  浏览器直连 CDN。
+在 Cloudflare 上二选一：
 
-部署步骤见 [`cloudflare/README.md`](cloudflare/README.md)。注意：先部署带路径
-路由的应用到主站，再部署 Worker；Worker 只是代理，不会自行解析页面。
+- **代理 DNS（推荐）**：为 `xiaoyuzhoufm.dev` 和 `www` 添加指向服务器的
+  A / AAAA（或 CNAME）记录，并开启橙云代理。源站使用 Cloudflare Origin
+  Certificate，SSL/TLS 模式设为 Full (strict)。
+- **Cloudflare Tunnel**：在服务器上运行 `cloudflared`，把域名指向本机的
+  `http://127.0.0.1:3000`，不需要开放端口或配置源站证书。
+
+应用默认监听 `3000`，前面用 Nginx / Caddy 终止 TLS 即可：
+
+```nginx
+server {
+  listen 443 ssl;
+  server_name www.xiaoyuzhoufm.dev;
+  # ssl_certificate ...
+  location / {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+}
+```
+
+裸域建议跳转到 `www`（Cloudflare Redirect Rule 或 Nginx 均可）。`.dev` 在
+HSTS 预加载列表中，别名必须始终使用 HTTPS。
+
+> **为什么不部署到 Cloudflare Workers？** 小宇宙的 WAF 会拒绝任何携带
+> `Cf-Worker` 请求头的访问（HTTP 403），而 Workers 对外发起的子请求会被
+> 运行时强制加上该头，且无法覆盖或移除。因此页面解析必须由普通服务器完成；
+> 把域名直接解析到现有服务器即可，不需要 Worker。
 
 ## 移动端与微信
 
@@ -164,7 +189,6 @@ TanStack Start Server Function  ──►  https://www.xiaoyuzhoufm.com/episode|
 | `src/components/PathArchive.tsx` | 把 `/episode/<id>`、`/podcast/<id>` 路径接入现有解析页 |
 | `src/routes/episode.$eid.tsx` | 单集路径路由，校验 24 位 ID |
 | `src/routes/podcast.$pid.tsx` | 播客路径路由，校验 24 位 ID |
-| `cloudflare/worker.js` | `xiaoyuzhoufm.dev` 反向代理 Worker（固定上游、重写跳转、noindex） |
 | `src/routes/index.tsx` | `?url=` 搜索参数与首页入口 |
 | `src/styles.css` | Tailwind 入口、纸面横线、封面阴影、show notes 排版 |
 | `src/cosmos-theme.css` | 小宇宙同款主题 tokens 与 shadcn/ui 组件重绘 |
@@ -188,7 +212,7 @@ TanStack Start Server Function  ──►  https://www.xiaoyuzhoufm.com/episode|
 - 播客页的公开 HTML 只包含**最新 15 集**；更多历史单集需要登录小宇宙 App，本项目不会收集账号信息，也不绕过限制。
 - 付费 / 私有单集会显示「付费 / 受限」，不会尝试播放或下载。
 - 网页内播放依赖音频 CDN 可访问；部分网络环境下可能需要下载后离线收听。
-- 镜像域名依赖主站可访问；Worker 只是反向代理，主站不可用时别名也不可用。
+- 别名域名与默认域名由同一台服务器提供，服务器不可用时两者都不可用。
 - 微信内置浏览器可以播放音频，但锁屏或切到后台时可能被系统暂停；保存文件仍需在系统浏览器中打开。
 - 微信内置浏览器不能直接保存文件，需要按页面提示在系统浏览器中打开。
 - iOS Safari 批量下载多个文件时可能逐次询问权限，请选择允许。

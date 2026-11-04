@@ -6,9 +6,6 @@ dist-ssr
 .env
 .nitro
 .tanstack
-.wrangler
-.dev.vars
-.dev.vars.*
 .output
 .vinxi
 __unconfig*

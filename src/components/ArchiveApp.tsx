@@ -23,6 +23,7 @@ import {
   ImageDown,
   Link2,
   ListMusic,
+  ListPlus,
   Loader2,
   MessageCircle,
   MoreHorizontal,
@@ -469,8 +470,8 @@ export function ArchiveApp({ urlParam, onUrlChange }: ArchiveAppProps) {
             </h1>
 
             <p className="mx-auto mt-4 max-w-[520px] text-[14px] leading-7 text-muted-foreground sm:text-[15px]">
-              粘贴小宇宙的单集或播客链接，在线试听，或解析音频、封面与节目简介。
-              下载由浏览器直接完成，文件名已经替你整理好。
+              粘贴小宇宙的单集或播客链接，即可在线试听，也能解析音频、原图封面与节目简介。
+              想听的可以先加入待播，需要留存时直接下载，文件由浏览器保存，文件名已经替你整理好。
             </p>
           </div>
 
@@ -656,7 +657,7 @@ function TransferPanel({ transfer }: { transfer: DownloadProgressState | null })
       className={cn(
         'fixed inset-x-4 z-50 rounded-[6px] border border-border bg-popover p-4 shadow-[0_12px_36px_-12px_rgb(0_0_0/0.22)] sm:inset-x-auto sm:right-6 sm:w-[320px]',
         track
-          ? 'bottom-[calc(4.75rem+env(safe-area-inset-bottom))]'
+          ? 'bottom-[calc(6rem+env(safe-area-inset-bottom))]'
           : 'bottom-[max(1rem,env(safe-area-inset-bottom))]',
       )}
     >
@@ -823,6 +824,15 @@ function EpisodeResult({ episode }: { episode: Episode }) {
     })
   }
 
+  function handleEnqueue() {
+    const added = player.enqueue(playbackTrack(episode))
+    if (added > 0) {
+      toast.success('已加入待播列表', { description: episode.title })
+    } else {
+      toast('已在待播列表中', { description: episode.title })
+    }
+  }
+
   async function handleCopyAudio() {
     const copied = await copyText(episode.audioUrl)
     if (copied) {
@@ -959,6 +969,18 @@ function EpisodeResult({ episode }: { episode: Episode }) {
           />
           {favorited ? '已收藏' : '收藏播客'}
         </Button>
+
+        {playable ? (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleEnqueue}
+            className="h-10 rounded-[4px] px-3 text-[13px] sm:px-4"
+          >
+            <ListPlus className="size-4" />
+            加入待播列表
+          </Button>
+        ) : null}
 
         {paid ? (
           <Button disabled className="h-10 rounded-[4px] px-3 text-[13px] sm:px-4">
@@ -1315,6 +1337,7 @@ function PodcastResult({
   onDownloadAllCovers: () => void
 }) {
   const { favorites, toggleFavorite } = useLibrary()
+  const player = useAudioPlayer()
   const originalUrl = `https://www.xiaoyuzhoufm.com/podcast/${podcast.pid}`
   const favorited = favorites.some((item) => item.url === originalUrl)
   const downloadableCount = episodes.filter(
@@ -1329,6 +1352,17 @@ function PodcastResult({
     toast.success(next ? '已收藏播客' : '已取消收藏', {
       description: podcast.title,
     })
+  }
+
+  function handleAddAllToQueue() {
+    const added = player.enqueue(playableTracks)
+    if (added > 0) {
+      toast.success(`已加入播放列表（${added} 集）`, {
+        description: podcast.title,
+      })
+    } else {
+      toast('这些单集已在播放列表中', { description: podcast.title })
+    }
   }
 
   async function handleCopyPodcast() {
@@ -1514,7 +1548,6 @@ function PodcastResult({
             <EpisodeRow
               key={episode.eid || `${episode.title}-${index}`}
               episode={episode}
-              playlist={playableTracks}
             />
           ))}
           {episodes.length === 0 ? (
@@ -1523,6 +1556,20 @@ function PodcastResult({
             </p>
           ) : null}
         </div>
+
+        {playableTracks.length > 0 ? (
+          <div className="mt-3 flex justify-center">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleAddAllToQueue}
+              className="h-9 rounded-[4px] px-3.5 text-[13px]"
+            >
+              <ListPlus className="size-4" />
+              加入播放列表（{playableTracks.length}）
+            </Button>
+          </div>
+        ) : null}
 
         {hasMore ? (
           <div className="border-t border-border pt-3 text-[11px] leading-6 text-muted-foreground">
@@ -1535,19 +1582,22 @@ function PodcastResult({
   )
 }
 
-function EpisodeRow({
-  episode,
-  playlist,
-}: {
-  episode: Episode
-  playlist?: PlaybackTrack[]
-}) {
+function EpisodeRow({ episode }: { episode: Episode }) {
   const player = useAudioPlayer()
   const paid = isPaid(episode)
   const playable = !paid && Boolean(episode.audioUrl)
   const current = player.isCurrent(episode.eid)
   const isPlaying = current && player.playing
   const blurb = episode.description ? htmlToText(episode.description).trim() : ''
+
+  function handleEnqueue() {
+    const added = player.enqueue(playbackTrack(episode))
+    if (added > 0) {
+      toast.success('已加入待播列表', { description: episode.title })
+    } else {
+      toast('已在待播列表中', { description: episode.title })
+    }
+  }
 
   return (
     <div className="group flex gap-3.5 border-b border-border py-5 last:border-b-0 sm:gap-4">
@@ -1598,9 +1648,7 @@ function EpisodeRow({
           <button
             type="button"
             onClick={() =>
-              current
-                ? player.toggle()
-                : player.play(playbackTrack(episode), playlist)
+              current ? player.toggle() : player.play(playbackTrack(episode))
             }
             aria-label={
               isPlaying ? `暂停 ${episode.title}` : `播放 ${episode.title}`
@@ -1631,13 +1679,25 @@ function EpisodeRow({
           </span>
         )}
 
+        {playable ? (
+          <button
+            type="button"
+            onClick={handleEnqueue}
+            aria-label={`将 ${episode.title} 加入待播列表`}
+            title="加入待播列表"
+            className="hidden size-9 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none sm:grid"
+          >
+            <ListPlus className="size-4" />
+          </button>
+        ) : null}
+
         {!paid && episode.audioUrl ? (
           <DownloadLink
             url={episode.audioUrl}
             filename={audioFilename(episode)}
             aria-label={`下载 ${episode.title} 的音频`}
             title="下载音频"
-            className="grid size-9 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="hidden size-9 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:grid"
           >
             <Download className="size-4" />
           </DownloadLink>
@@ -1653,6 +1713,49 @@ function EpisodeRow({
           >
             <ImageDown className="size-4" />
           </DownloadLink>
+        ) : null}
+
+        {playable || (!paid && episode.audioUrl) || episode.imageUrl ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label={`${episode.title} 的更多操作`}
+                title="更多操作"
+                className="grid size-9 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none sm:hidden"
+              >
+                <MoreHorizontal className="size-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              {playable ? (
+                <DropdownMenuItem onClick={handleEnqueue}>
+                  <ListPlus className="size-4" /> 加入待播列表
+                </DropdownMenuItem>
+              ) : null}
+              {!paid && episode.audioUrl ? (
+                <DropdownMenuItem
+                  onClick={() =>
+                    guardedDownload(episode.audioUrl, audioFilename(episode))
+                  }
+                >
+                  <Download className="size-4" /> 下载音频
+                </DropdownMenuItem>
+              ) : null}
+              {episode.imageUrl ? (
+                <DropdownMenuItem
+                  onClick={() =>
+                    guardedDownload(
+                      episode.imageUrl,
+                      coverFilename(episode.title, episode.imageExt),
+                    )
+                  }
+                >
+                  <ImageDown className="size-4" /> 下载封面
+                </DropdownMenuItem>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
         ) : null}
       </div>
     </div>

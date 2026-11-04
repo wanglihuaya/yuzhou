@@ -78,9 +78,9 @@ export function Brand({ className }: { className?: string }) {
         <span className="truncate text-[17px] font-bold tracking-tight text-foreground">
           宇宙备份
         </span>
-        <span className="hidden text-[12px] text-muted-foreground sm:inline">
+        {/* <span className="hidden text-[12px] text-muted-foreground sm:inline">
           小宇宙的离线备份
-        </span>
+        </span> */}
       </span>
     </span>
   )

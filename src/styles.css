@@ -47,7 +47,7 @@
 .paper-band {
   position: absolute;
   inset: 0 0 auto;
-  height: 220px;
+  height: 440px;
   pointer-events: none;
   background-image: repeating-linear-gradient(
     to bottom,
@@ -67,6 +67,25 @@
     to bottom,
     rgb(0 0 0 / 100%) 0%,
     rgb(0 0 0 / 85%) 45%,
+    rgb(0 0 0 / 0%) 100%
+  );
+}
+
+/* The fixed player borrows the same ruled paper, mirrored so the lines sit
+   behind the controls and dissolve before they reach the top edge. */
+.paper-band-player {
+  height: 100%;
+  background-position: 0 0;
+  -webkit-mask-image: linear-gradient(
+    to top,
+    rgb(0 0 0 / 100%) 0%,
+    rgb(0 0 0 / 80%) 65%,
+    rgb(0 0 0 / 0%) 100%
+  );
+  mask-image: linear-gradient(
+    to top,
+    rgb(0 0 0 / 100%) 0%,
+    rgb(0 0 0 / 80%) 65%,
     rgb(0 0 0 / 0%) 100%
   );
 }
@@ -104,7 +123,7 @@
 /* ---- Show notes -----------------------------------------------------------
 
    Rendered HTML from the episode page. It is set like the reference's body
-   copy: 15px on a generous line, ink at rest, sienna links, images rounded
+   copy: 15px on a generous line, ink at rest, cyan links, images rounded
    and centred. Everything is scoped so the sanitizer's plain tags need no
    utility classes. */
 
@@ -251,7 +270,7 @@
 
    The scrubber is a full-width, mostly invisible range input laid over the
    player's top hairline, so the whole width of the bar can be dragged. The
-   sienna thumb only appears on hover or keyboard focus. */
+   cyan thumb only appears on hover or keyboard focus. */
 
 .player-seek {
   appearance: none;

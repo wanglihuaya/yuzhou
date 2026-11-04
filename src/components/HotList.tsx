@@ -46,7 +46,7 @@ export function HotList({ onOpen }: { onOpen: (url: string) => void }) {
     return (
       <section className="mx-auto mt-10 max-w-[640px]">
         <HotHeader />
-        <div className="mt-2 grid gap-x-5 sm:grid-cols-2">
+        <div className="mt-2 grid grid-cols-1 gap-x-5 sm:grid-cols-2">
           {Array.from({ length: 6 }, (_, index) => (
             <div
               key={index}
@@ -72,7 +72,7 @@ export function HotList({ onOpen }: { onOpen: (url: string) => void }) {
     <section className="mx-auto mt-10 max-w-[640px]">
       <HotHeader />
 
-      <div className="mt-2 grid gap-x-5 sm:grid-cols-2">
+      <div className="mt-2 grid grid-cols-1 gap-x-5 sm:grid-cols-2">
         {visible.map((item, index) => (
           <button
             key={item.url}

@@ -1,13 +1,4 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react'
+import { Drawer } from '@base-ui/react/drawer'
 import {
   AudioLines,
   Captions,
@@ -20,7 +11,16 @@ import {
   RotateCw,
   X,
 } from 'lucide-react'
-import { Drawer } from '@base-ui/react/drawer'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import { toast } from 'sonner'
 
 import { formatDuration } from '@/lib/format'
@@ -48,6 +48,11 @@ interface AudioPlayerContextValue {
   rate: number
   isCurrent: (id: string) => boolean
   play: (track: PlaybackTrack, queue?: PlaybackTrack[]) => void
+  /**
+   * Appends tracks to the queue without interrupting playback.
+   * Returns how many were newly added (already-queued items are skipped).
+   */
+  enqueue: (tracks: PlaybackTrack | PlaybackTrack[]) => number
   toggle: () => void
   pause: () => void
   seek: (seconds: number) => void
@@ -153,6 +158,11 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     [reportFailure],
   )
 
+  const commitQueue = useCallback((next: PlaybackTrack[]) => {
+    queueRef.current = next
+    setQueue(next)
+  }, [])
+
   const play = useCallback(
     (next: PlaybackTrack, nextQueue?: PlaybackTrack[]) => {
       const audio = audioRef.current
@@ -161,18 +171,15 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
       }
 
       if (nextQueue) {
-        const merged = dedupeQueue(
-          nextQueue.some((item) => item.id === next.id)
-            ? nextQueue
-            : [next, ...nextQueue],
+        commitQueue(
+          dedupeQueue(
+            nextQueue.some((item) => item.id === next.id)
+              ? nextQueue
+              : [next, ...nextQueue],
+          ),
         )
-        setQueue(merged)
-      } else {
-        setQueue((current) =>
-          current.some((item) => item.id === next.id)
-            ? current
-            : [...current, next],
-        )
+      } else if (!queueRef.current.some((item) => item.id === next.id)) {
+        commitQueue([...queueRef.current, next])
       }
 
       if (trackRef.current?.id !== next.id) {
@@ -187,7 +194,36 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
 
       startPlayback(audio)
     },
-    [rate, startPlayback],
+    [rate, startPlayback, commitQueue],
+  )
+
+  const enqueue = useCallback(
+    (items: PlaybackTrack | PlaybackTrack[]) => {
+      const list = Array.isArray(items) ? items : [items]
+      const audio = audioRef.current
+      if (!audio || list.length === 0) {
+        return 0
+      }
+
+      const incoming = dedupeQueue(list)
+
+      // Nothing is loaded yet, so the queue would have no visible home:
+      // start the first item and keep the rest waiting behind it.
+      if (!trackRef.current) {
+        play(incoming[0], incoming)
+        return incoming.length
+      }
+
+      const existing = new Set(queueRef.current.map((item) => item.id))
+      const additions = incoming.filter((item) => !existing.has(item.id))
+
+      if (additions.length > 0) {
+        commitQueue([...queueRef.current, ...additions])
+      }
+
+      return additions.length
+    },
+    [play, commitQueue],
   )
 
   const toggle = useCallback(() => {
@@ -247,8 +283,8 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
 
   const clearQueue = useCallback(() => {
     const current = trackRef.current
-    setQueue(current ? [current] : [])
-  }, [])
+    commitQueue(current ? [current] : [])
+  }, [commitQueue])
 
   const close = useCallback(() => {
     const audio = audioRef.current
@@ -378,6 +414,7 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
       rate,
       isCurrent: (id) => track?.id === id,
       play,
+      enqueue,
       toggle,
       pause,
       seek,
@@ -386,7 +423,7 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
       clearQueue,
       close,
     }),
-    [track, playing, loading, currentTime, duration, queue, rate, play, toggle, pause, seek, skip, cycleRate, clearQueue, close],
+    [track, playing, loading, currentTime, duration, queue, rate, play, enqueue, toggle, pause, seek, skip, cycleRate, clearQueue, close],
   )
 
   return (
@@ -466,18 +503,18 @@ function SkipButton({
       title={direction === 'back' ? `后退 ${seconds} 秒` : `前进 ${seconds} 秒`}
       className={cn(
         'relative grid place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none',
-        large ? 'size-11' : 'size-8 sm:size-9',
+        large ? 'size-11' : 'size-9 sm:size-10',
       )}
     >
       <Icon
-        className={large ? 'size-7' : 'size-[21px]'}
+        className={large ? 'size-7' : 'size-[23px]'}
         strokeWidth={1.7}
         aria-hidden="true"
       />
       <span
         className={cn(
           'pointer-events-none absolute inset-0 grid place-items-center pt-px font-semibold tracking-tight',
-          large ? 'text-[9px]' : 'text-[7.5px] leading-none',
+          large ? 'text-[9px]' : 'text-[8px] leading-none',
         )}
       >
         {seconds}
@@ -516,13 +553,17 @@ function AudioPlayerBar() {
   return (
     <>
       {/* Keeps the end of the page above the fixed player. */}
-      <div className="h-[calc(92px+env(safe-area-inset-bottom))]" aria-hidden="true" />
+      <div className="h-[calc(112px+env(safe-area-inset-bottom))]" aria-hidden="true" />
 
       <section
         aria-label="音频播放器"
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-12px_32px_-24px_rgb(0_0_0/0.35)] backdrop-blur-md"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/65 pb-[env(safe-area-inset-bottom)] shadow-[0_-12px_32px_-24px_rgb(0_0_0/0.35)] backdrop-blur-xl backdrop-saturate-150"
       >
-        <div className="relative">
+        <div className="relative isolate">
+          <div
+            className="paper-band paper-band-player -z-10"
+            aria-hidden="true"
+          />
           <div
             className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-border"
             aria-hidden="true"
@@ -544,15 +585,15 @@ function AudioPlayerBar() {
             className="player-seek absolute inset-x-0 top-0 z-10 h-4 w-full"
           />
 
-          <div className="mx-auto flex w-full max-w-[980px] items-center gap-2.5 px-4 pt-4 pb-2.5 sm:gap-3 sm:px-6 sm:pt-3">
+          <div className="mx-auto flex w-full max-w-[980px] items-center gap-3 px-4 pt-5 pb-4 sm:px-6">
             <button
               type="button"
               onClick={() => setSheetOpen(true)}
               aria-label="展开播放器"
               title="展开播放器"
-              className="flex min-w-0 flex-1 items-center gap-2.5 rounded-[4px] text-left focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none sm:gap-3"
+              className="flex min-w-0 flex-1 items-center gap-3 rounded-[4px] text-left focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none"
             >
-              <span className="relative size-10 shrink-0 overflow-hidden rounded-[3px] bg-muted">
+              <span className="relative size-11 shrink-0 overflow-hidden rounded-[3px] bg-muted">
                 {track.cover ? (
                   <img
                     src={track.cover}
@@ -564,10 +605,10 @@ function AudioPlayerBar() {
               </span>
 
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13px] leading-5 font-medium text-foreground">
+                <span className="block truncate text-[14px] leading-5 font-medium text-foreground">
                   {track.title}
                 </span>
-                <span className="mt-0.5 flex items-center gap-1.5 text-[11px] leading-4 text-muted-foreground">
+                <span className="mt-1 flex items-center gap-1.5 text-[12px] leading-4 text-muted-foreground">
                   <span className="truncate">{track.podcast}</span>
                   <span className="shrink-0 tabular-nums">
                     {clock(currentTime)} / {clock(total)}
@@ -576,7 +617,7 @@ function AudioPlayerBar() {
               </span>
             </button>
 
-            <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
+            <div className="flex shrink-0 items-center gap-1">
               <SkipButton seconds={15} direction="back" onClick={() => skip(-15)} />
               <button
                 type="button"
@@ -584,16 +625,16 @@ function AudioPlayerBar() {
                 aria-label={playing ? '暂停' : '播放'}
                 title={playing ? '暂停' : '播放'}
                 className={cn(
-                  'grid size-10 place-items-center rounded-full bg-brand text-brand-foreground transition-[background-color,transform] duration-150 hover:bg-brand/90 active:scale-95',
+                  'grid size-11 place-items-center rounded-full bg-brand text-brand-foreground transition-[background-color,transform] duration-150 hover:bg-brand/90 active:scale-95',
                   'focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none',
                 )}
               >
                 {loading ? (
-                  <Loader2 className="size-4 animate-spin" />
+                  <Loader2 className="size-[18px] animate-spin" />
                 ) : playing ? (
-                  <Pause className="size-4 fill-current" />
+                  <Pause className="size-[18px] fill-current" />
                 ) : (
-                  <Play className="ml-0.5 size-4 fill-current" />
+                  <Play className="ml-0.5 size-[18px] fill-current" />
                 )}
               </button>
               <SkipButton seconds={30} direction="forward" onClick={() => skip(30)} />
@@ -604,9 +645,9 @@ function AudioPlayerBar() {
               onClick={close}
               aria-label="关闭播放器"
               title="关闭播放器"
-              className="ml-0.5 grid size-8 shrink-0 place-items-center rounded-[4px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none"
+              className="ml-0.5 grid size-9 shrink-0 place-items-center rounded-[4px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none"
             >
-              <X className="size-4" />
+              <X className="size-[18px]" />
             </button>
           </div>
         </div>
@@ -757,7 +798,7 @@ function PlayerSheet({
     >
       <Drawer.Portal>
         <Drawer.Backdrop className="player-drawer-backdrop fixed inset-0 z-50 bg-black" />
-        <Drawer.Viewport className="fixed inset-0 z-50 flex items-end justify-center md:justify-end md:pr-6 md:pb-[calc(63px+env(safe-area-inset-bottom)+1rem)]">
+        <Drawer.Viewport className="fixed inset-0 z-50 flex items-end justify-center md:justify-end md:pr-6 md:pb-[calc(84px+env(safe-area-inset-bottom)+1rem)]">
           <Drawer.Popup className="player-drawer-popup h-[60dvh] w-full max-w-[480px] overflow-hidden rounded-t-[16px] border border-b-0 border-border bg-background shadow-[0_-24px_60px_-24px_rgb(0_0_0/0.45)] outline-none sm:mb-4 sm:rounded-[12px] sm:border-b md:mb-0 md:h-[min(460px,55dvh)] md:w-[440px] md:max-w-[calc(100vw-3rem)] md:rounded-[12px] md:border-b md:shadow-[0_24px_64px_-24px_rgb(0_0_0/0.45)]">
             {/* Only the handle starts a swipe; the content below opts out. */}
             <div

@@ -11,6 +11,8 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiDownloadRouteImport } from './routes/api/download'
+import { Route as EpisodeEidRouteImport } from './routes/episode.$eid'
+import { Route as PodcastPidRouteImport } from './routes/podcast.$pid'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -22,31 +24,49 @@ const ApiDownloadRoute = ApiDownloadRouteImport.update({
   path: '/api/download',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EpisodeEidRoute = EpisodeEidRouteImport.update({
+  id: '/episode/$eid',
+  path: '/episode/$eid',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PodcastPidRoute = PodcastPidRouteImport.update({
+  id: '/podcast/$pid',
+  path: '/podcast/$pid',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/download': typeof ApiDownloadRoute
+  '/episode/$eid': typeof EpisodeEidRoute
+  '/podcast/$pid': typeof PodcastPidRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/download': typeof ApiDownloadRoute
+  '/episode/$eid': typeof EpisodeEidRoute
+  '/podcast/$pid': typeof PodcastPidRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api/download': typeof ApiDownloadRoute
+  '/episode/$eid': typeof EpisodeEidRoute
+  '/podcast/$pid': typeof PodcastPidRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/download'
+  fullPaths: '/' | '/api/download' | '/episode/$eid' | '/podcast/$pid'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/download'
-  id: '__root__' | '/' | '/api/download'
+  to: '/' | '/api/download' | '/episode/$eid' | '/podcast/$pid'
+  id: '__root__' | '/' | '/api/download' | '/episode/$eid' | '/podcast/$pid'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiDownloadRoute: typeof ApiDownloadRoute
+  EpisodeEidRoute: typeof EpisodeEidRoute
+  PodcastPidRoute: typeof PodcastPidRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -65,12 +85,28 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiDownloadRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/episode/$eid': {
+      id: '/episode/$eid'
+      path: '/episode/$eid'
+      fullPath: '/episode/$eid'
+      preLoaderRoute: typeof EpisodeEidRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/podcast/$pid': {
+      id: '/podcast/$pid'
+      path: '/podcast/$pid'
+      fullPath: '/podcast/$pid'
+      preLoaderRoute: typeof PodcastPidRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiDownloadRoute: ApiDownloadRoute,
+  EpisodeEidRoute: EpisodeEidRoute,
+  PodcastPidRoute: PodcastPidRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

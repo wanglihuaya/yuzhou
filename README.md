@@ -3,6 +3,7 @@
 粘贴小宇宙（[xiaoyuzhoufm.com](https://www.xiaoyuzhoufm.com)）的单集或播客链接，解析、在线播放并下载：
 
 - 单集音频的网页内播放（底部播放器：进度拖动、后退 15 秒 / 前进 30 秒）
+- `/episode/<id>`、`/podcast/<id>` 路径直达，支持把链接域名替换为 `xiaoyuzhoufm.dev`
 - 单集音频（`mp3` / `m4a` / `wav` / `ogg` / `flac` / `aac` 等）
 - 单集封面原图
 - 播客封面原图
@@ -42,6 +43,8 @@ pnpm preview
 
 - 单集页面：`https://www.xiaoyuzhoufm.com/episode/<24 位 ID>`
 - 播客页面：`https://www.xiaoyuzhoufm.com/podcast/<24 位 ID>`
+- 路径直达：`<本站>/episode/<24 位 ID>` 或 `<本站>/podcast/<24 位 ID>`
+- 镜像域名：把上面的 `www.xiaoyuzhoufm.com` 换成 `www.xiaoyuzhoufm.dev` 即可
 - 直接输入 24 位 ID：会先按单集解析，找不到再按播客解析
 - 从小宇宙 App 复制的分享文案：会自动提取其中的链接
 
@@ -50,7 +53,24 @@ pnpm preview
 - 单集：<https://www.xiaoyuzhoufm.com/episode/6ae967cec96c8942ec167f82>
 - 播客：<https://www.xiaoyuzhoufm.com/podcast/682c566cc7c5f17595635a2c>
 
-解析结果会写入地址栏的 `?url=` 参数，方便直接分享或刷新恢复。
+解析结果会写入地址栏的 `?url=` 参数，方便直接分享或刷新恢复；通过
+`/episode/<id>`、`/podcast/<id>` 打开时则保留路径。
+
+## 镜像域名（xiaoyuzhoufm.dev）
+
+`www.xiaoyuzhoufm.dev` 是同一个应用的反向代理入口，由
+[`cloudflare/`](cloudflare/) 里的 Cloudflare Worker 实现：
+
+- 访问 `https://www.xiaoyuzhoufm.dev/episode/<id>` 或
+  `.../podcast/<id>`，Worker 把请求转发到主站，地址栏保留
+  `/episode/<id>` 路径，解析、播放、下载、评论与主站完全一致。
+- 主站的代码、DNS 与证书不受影响；只新增 Worker 域名。
+- 别名页响应带 `X-Robots-Tag: noindex`，不参与搜索引擎收录。
+- 页面、静态资源、`/api/*`、`/sw.js` 都经 Worker 转发；播放器与流式下载仍由
+  浏览器直连 CDN。
+
+部署步骤见 [`cloudflare/README.md`](cloudflare/README.md)。注意：先部署带路径
+路由的应用到主站，再部署 Worker；Worker 只是代理，不会自行解析页面。
 
 ## 移动端与微信
 
@@ -141,6 +161,10 @@ TanStack Start Server Function  ──►  https://www.xiaoyuzhoufm.com/episode|
 | `src/routes/api/download.ts` | 流式下载代理、域名白名单、中文文件名、Range 支持（兜底） |
 | `src/components/ArchiveApp.tsx` | 页面状态、单集/播客视图、播放入口、批量下载、微信下载提示 |
 | `src/components/AudioPlayer.tsx` | 全局播放器：音频状态、进度拖动、±15/30 秒、Media Session、底部播放条 |
+| `src/components/PathArchive.tsx` | 把 `/episode/<id>`、`/podcast/<id>` 路径接入现有解析页 |
+| `src/routes/episode.$eid.tsx` | 单集路径路由，校验 24 位 ID |
+| `src/routes/podcast.$pid.tsx` | 播客路径路由，校验 24 位 ID |
+| `cloudflare/worker.js` | `xiaoyuzhoufm.dev` 反向代理 Worker（固定上游、重写跳转、noindex） |
 | `src/routes/index.tsx` | `?url=` 搜索参数与首页入口 |
 | `src/styles.css` | Tailwind 入口、纸面横线、封面阴影、show notes 排版 |
 | `src/cosmos-theme.css` | 小宇宙同款主题 tokens 与 shadcn/ui 组件重绘 |
@@ -164,6 +188,7 @@ TanStack Start Server Function  ──►  https://www.xiaoyuzhoufm.com/episode|
 - 播客页的公开 HTML 只包含**最新 15 集**；更多历史单集需要登录小宇宙 App，本项目不会收集账号信息，也不绕过限制。
 - 付费 / 私有单集会显示「付费 / 受限」，不会尝试播放或下载。
 - 网页内播放依赖音频 CDN 可访问；部分网络环境下可能需要下载后离线收听。
+- 镜像域名依赖主站可访问；Worker 只是反向代理，主站不可用时别名也不可用。
 - 微信内置浏览器可以播放音频，但锁屏或切到后台时可能被系统暂停；保存文件仍需在系统浏览器中打开。
 - 微信内置浏览器不能直接保存文件，需要按页面提示在系统浏览器中打开。
 - iOS Safari 批量下载多个文件时可能逐次询问权限，请选择允许。

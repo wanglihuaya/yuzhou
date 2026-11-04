@@ -521,7 +521,9 @@ export function parseXiaoyuzhouInput(raw: string): ParsedInput | null {
     return null
   }
 
-  if (!/(^|\.)xiaoyuzhoufm\.com$/i.test(url.hostname)) {
+  // Both the official domain and our read-only alias are accepted as input.
+  // Resolution still fetches PAGE_ORIGIN, so the alias never becomes a proxy.
+  if (!/(^|\.)xiaoyuzhoufm\.(com|dev)$/i.test(url.hostname)) {
     return null
   }
 

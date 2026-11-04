@@ -76,18 +76,6 @@ export const Route = createRootRoute({
         href: appCss,
       },
     ],
-    scripts: [
-      {
-        src: 'https://analyse.commands.top/script.js',
-        defer: true,
-        'data-website-id': 'e9b8f8b7-14b1-4cca-bf45-28f9d641a39f',
-      },
-      {
-        src: 'https://analyse.commands.top/recorder.js',
-        defer: true,
-        'data-website-id': 'e9b8f8b7-14b1-4cca-bf45-28f9d641a39f',
-      },
-    ],
   }),
   shellComponent: RootDocument,
   notFoundComponent: NotFound,
@@ -122,11 +110,21 @@ function RootDocument({ children }: { children: ReactNode }) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <HeadContent />
+        <script
+          defer
+          src="https://analyse.commands.top/script.js"
+          data-website-id="f0b412f9-8fe3-4d43-9889-9cd0e7316857"
+        />
+        <script
+          defer
+          src="https://analyse.commands.top/recorder.js"
+          data-website-id="f0b412f9-8fe3-4d43-9889-9cd0e7316857"
+        />
       </head>
-      <body className="min-h-dvh font-sans antialiased">
+      <body className="flex min-h-dvh flex-col font-sans antialiased">
         <AudioPlayerProvider>
           <Header />
-          {children}
+          <div className="flex flex-1 flex-col">{children}</div>
           <Footer />
         </AudioPlayerProvider>
         <AppToaster />

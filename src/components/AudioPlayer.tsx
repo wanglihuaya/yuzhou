@@ -47,7 +47,11 @@ interface AudioPlayerContextValue {
   queue: PlaybackTrack[]
   rate: number
   isCurrent: (id: string) => boolean
-  play: (track: PlaybackTrack, queue?: PlaybackTrack[]) => void
+  play: (
+    track: PlaybackTrack,
+    queue?: PlaybackTrack[],
+    options?: { position?: number },
+  ) => void
   /**
    * Appends tracks to the queue without interrupting playback.
    * Returns how many were newly added (already-queued items are skipped).
@@ -104,6 +108,7 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const trackRef = useRef<PlaybackTrack | null>(null)
   const queueRef = useRef<PlaybackTrack[]>([])
+  const pendingPositionRef = useRef<number | null>(null)
 
   const [track, setTrack] = useState<PlaybackTrack | null>(null)
   const [playing, setPlaying] = useState(false)
@@ -164,7 +169,11 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const play = useCallback(
-    (next: PlaybackTrack, nextQueue?: PlaybackTrack[]) => {
+    (
+      next: PlaybackTrack,
+      nextQueue?: PlaybackTrack[],
+      options?: { position?: number },
+    ) => {
       const audio = audioRef.current
       if (!audio) {
         return
@@ -193,6 +202,30 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
       }
 
       startPlayback(audio)
+
+      // Shownote timestamps open the episode at a specific moment. Apply the
+      // position after starting so an ended track does not restart from 0.
+      const position = options?.position
+      pendingPositionRef.current = null
+
+      if (position !== undefined && Number.isFinite(position)) {
+        const known =
+          Number.isFinite(audio.duration) && audio.duration > 0
+            ? audio.duration
+            : (next.duration || 0)
+        const target = Math.max(
+          0,
+          known > 0 ? Math.min(position, known) : position,
+        )
+        // Metadata may still be loading; keep the target for that event.
+        pendingPositionRef.current = audio.readyState < 1 ? target : null
+        try {
+          audio.currentTime = target
+          setCurrentTime(target)
+        } catch {
+          pendingPositionRef.current = target
+        }
+      }
     },
     [rate, startPlayback, commitQueue],
   )
@@ -439,6 +472,22 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
               ? audio.duration
               : (trackRef.current?.duration ?? 0),
           )
+
+          const pending = pendingPositionRef.current
+          if (pending !== null) {
+            pendingPositionRef.current = null
+            const known =
+              Number.isFinite(audio.duration) && audio.duration > 0
+                ? audio.duration
+                : pending
+            const target = Math.min(pending, known)
+            try {
+              audio.currentTime = target
+              setCurrentTime(target)
+            } catch {
+              // Ignore; the browser keeps the previous position.
+            }
+          }
         }}
         onDurationChange={(event) => {
           const audio = event.currentTarget

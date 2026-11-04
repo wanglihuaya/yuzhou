@@ -20,5 +20,16 @@ export function AppToaster() {
     return () => observer.disconnect()
   }, [])
 
-  return <SonnerToaster theme={theme} position="top-center" />
+  // In an iOS standalone PWA the page extends under the status bar, so a
+  // toast pinned to the viewport top would sit behind the system chrome.
+  // Sonner's defaults are 24px (16px on mobile); push both clear of the
+  // safe-area inset so the first line of text stays readable.
+  return (
+    <SonnerToaster
+      theme={theme}
+      position="top-center"
+      offset={{ top: 'calc(24px + env(safe-area-inset-top, 0px))' }}
+      mobileOffset={{ top: 'calc(16px + env(safe-area-inset-top, 0px))' }}
+    />
+  )
 }

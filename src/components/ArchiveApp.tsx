@@ -6,6 +6,8 @@ import {
   useSyncExternalStore,
   type ComponentProps,
   type FormEvent,
+  type KeyboardEvent,
+  type MouseEvent,
   type ReactNode,
 } from 'react'
 import {
@@ -62,6 +64,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
+import { InlineCitation } from '@/components/ai-elements/inline-citation'
 import {
   copyText,
   downloadFromCdn,
@@ -350,9 +353,9 @@ export function ArchiveApp({ urlParam, onUrlChange }: ArchiveAppProps) {
     inputRef.current?.focus()
   }
 
-  async function copyPageLink() {
+  async function copyPageLink(): Promise<boolean> {
     if (typeof window === 'undefined') {
-      return
+      return false
     }
     const copied = await copyText(window.location.href)
     if (copied) {
@@ -362,9 +365,10 @@ export function ArchiveApp({ urlParam, onUrlChange }: ArchiveAppProps) {
     } else {
       toast.error('复制失败，请长按地址栏手动复制')
     }
+    return copied
   }
 
-  async function copyDownloadLink(href: string) {
+  async function copyDownloadLink(href: string): Promise<boolean> {
     const copied = await copyText(absoluteHref(href))
     if (copied) {
       toast.success('下载地址已复制', {
@@ -373,6 +377,7 @@ export function ArchiveApp({ urlParam, onUrlChange }: ArchiveAppProps) {
     } else {
       toast.error('复制失败，请稍后重试')
     }
+    return copied
   }
 
   async function runAudioBatch(episodes: Episode[], title: string) {
@@ -455,7 +460,7 @@ export function ArchiveApp({ urlParam, onUrlChange }: ArchiveAppProps) {
       <div className="paper-band" aria-hidden="true" />
 
       <div className="relative mx-auto w-full max-w-[980px] px-5 pt-8 sm:px-6 sm:pt-10">
-        {inWeChat ? <WeChatNotice onCopy={() => void copyPageLink()} /> : null}
+        {inWeChat ? <WeChatNotice onCopy={copyPageLink} /> : null}
 
         <section className="animate-rise">
           <div className="mx-auto max-w-[640px] text-center">
@@ -596,7 +601,10 @@ export function ArchiveApp({ urlParam, onUrlChange }: ArchiveAppProps) {
               {result.kind === 'episode' ? (
                 <>
                   <EpisodeResult episode={result.episode} />
-                  <EpisodeShownotes shownotes={result.episode.shownotes} />
+                  <EpisodeShownotes
+                    episode={result.episode}
+                    shownotes={result.episode.shownotes}
+                  />
                   <EpisodeComments
                     comments={result.comments}
                     total={result.episode.commentCount}
@@ -628,8 +636,8 @@ export function ArchiveApp({ urlParam, onUrlChange }: ArchiveAppProps) {
           onOpenChange={(open) =>
             setWechatHint((previous) => ({ ...previous, open }))
           }
-          onCopyPage={() => void copyPageLink()}
-          onCopyDownload={(href) => void copyDownloadLink(href)}
+          onCopyPage={copyPageLink}
+          onCopyDownload={copyDownloadLink}
         />
 
         <TransferPanel transfer={transfer} />
@@ -695,7 +703,20 @@ function TransferPanel({ transfer }: { transfer: DownloadProgressState | null })
   )
 }
 
-function WeChatNotice({ onCopy }: { onCopy: () => void }) {
+function WeChatNotice({
+  onCopy,
+}: {
+  onCopy: () => Promise<boolean>
+}) {
+  const [dismissed, setDismissed] = useState(false)
+
+  if (dismissed) {
+    return null
+  }
+
+  const pageUrl =
+    typeof window !== 'undefined' ? window.location.href : ''
+
   return (
     <div className="mb-6 flex flex-col gap-2.5 rounded-[6px] border-l-2 border-brand bg-brand-muted px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
       <div className="min-w-0 flex-1">
@@ -704,13 +725,20 @@ function WeChatNotice({ onCopy }: { onCopy: () => void }) {
           点右上角 ···，选择「在浏览器打开」，再回到本页下载。
         </p>
       </div>
-      <button
-        type="button"
-        onClick={onCopy}
-        className="shrink-0 self-start rounded-[4px] bg-background/80 px-3 py-1.5 text-[12px] font-medium text-brand transition-colors hover:bg-background sm:self-auto"
-      >
-        复制本页链接
-      </button>
+      <InlineCitation title="本页链接" url={pageUrl}>
+        <button
+          type="button"
+          onClick={async () => {
+            const copied = await onCopy()
+            if (copied) {
+              setDismissed(true)
+            }
+          }}
+          className="shrink-0 self-start rounded-[4px] bg-background/80 px-3 py-1.5 text-[12px] font-medium text-brand transition-colors hover:bg-background sm:self-auto"
+        >
+          复制本页链接
+        </button>
+      </InlineCitation>
     </div>
   )
 }
@@ -723,14 +751,31 @@ function WeChatDownloadDialog({
 }: {
   state: WeChatHintState
   onOpenChange: (open: boolean) => void
-  onCopyPage: () => void
-  onCopyDownload: (href: string) => void
+  onCopyPage: () => Promise<boolean>
+  onCopyDownload: (href: string) => Promise<boolean>
 }) {
   const steps = [
     '点右上角的 ··· 菜单',
     '选择「在浏览器打开」',
     '在浏览器里回到本页，再点下载',
   ]
+
+  const pageUrl =
+    typeof window !== 'undefined' ? window.location.href : ''
+
+  async function handleCopyPage() {
+    const copied = await onCopyPage()
+    if (copied) {
+      onOpenChange(false)
+    }
+  }
+
+  async function handleCopyDownload(href: string) {
+    const copied = await onCopyDownload(href)
+    if (copied) {
+      onOpenChange(false)
+    }
+  }
 
   return (
     <Dialog open={state.open} onOpenChange={onOpenChange}>
@@ -758,19 +803,25 @@ function WeChatDownloadDialog({
         </ol>
 
         <div className="mt-1 flex flex-col gap-2 sm:flex-row">
-          <Button
-            type="button"
-            onClick={onCopyPage}
-            className="h-10 flex-1 rounded-[4px] text-[13px]"
+          <InlineCitation
+            contentClassName="z-[70]"
+            title="本页链接"
+            url={pageUrl}
           >
-            <Copy className="size-4" />
-            复制本页链接
-          </Button>
+            <Button
+              type="button"
+              onClick={() => void handleCopyPage()}
+              className="h-10 flex-1 rounded-[4px] text-[13px]"
+            >
+              <Copy className="size-4" />
+              复制本页链接
+            </Button>
+          </InlineCitation>
           {state.href ? (
             <Button
               type="button"
               variant="outline"
-              onClick={() => onCopyDownload(state.href!)}
+              onClick={() => void handleCopyDownload(state.href!)}
               className="h-10 flex-1 rounded-[4px] text-[13px]"
             >
               <Link2 className="size-4" />
@@ -1068,7 +1119,26 @@ function SectionHeading({
   )
 }
 
-function EpisodeShownotes({ shownotes }: { shownotes: string }) {
+function clockLabel(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds))
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const rest = String(total % 60).padStart(2, '0')
+
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, '0')}:${rest}`
+  }
+  return `${minutes}:${rest}`
+}
+
+function EpisodeShownotes({
+  episode,
+  shownotes,
+}: {
+  episode: Episode
+  shownotes: string
+}) {
+  const player = useAudioPlayer()
   const [expanded, setExpanded] = useState(false)
   const [overflowing, setOverflowing] = useState(false)
   const contentRef = useRef<HTMLDivElement | null>(null)
@@ -1087,6 +1157,77 @@ function EpisodeShownotes({ shownotes }: { shownotes: string }) {
     observer.observe(element)
     return () => observer.disconnect()
   }, [html])
+
+  function seekFromAnchor(anchor: Element): boolean {
+    const seconds = Number(anchor.getAttribute('data-timestamp'))
+    if (!Number.isFinite(seconds) || seconds <= 0) {
+      return false
+    }
+
+    if (isPaid(episode) || !episode.audioUrl) {
+      toast.error('这期节目暂时无法播放')
+      return false
+    }
+
+    const label = anchor.textContent?.trim() || clockLabel(seconds)
+    player.play(playbackTrack(episode), undefined, { position: seconds })
+    toast.success(`已跳转到 ${label}`)
+    return true
+  }
+
+  function handleClick(event: MouseEvent<HTMLDivElement>) {
+    const target = event.target
+    const anchor = target instanceof Element ? target.closest('a') : null
+    if (!anchor) {
+      return
+    }
+
+    if (anchor.hasAttribute('data-timestamp')) {
+      event.preventDefault()
+      seekFromAnchor(anchor)
+      return
+    }
+
+    const href = anchor.getAttribute('href') ?? ''
+    if (!/^https?:/i.test(href) || !isWeChatBrowser()) {
+      return
+    }
+
+    // WeChat blocks leaving the webview for most external pages; offer the
+    // address instead of sending the user to a blank screen.
+    event.preventDefault()
+    toast('微信内无法直接打开外部链接', {
+      description: href,
+      action: {
+        label: '复制链接',
+        onClick: () => {
+          void copyText(href).then((copied) => {
+            if (copied) {
+              toast.success('链接已复制')
+            } else {
+              toast.error('复制失败，请长按链接手动复制')
+            }
+          })
+        },
+      },
+    })
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== 'Enter' && event.key !== ' ') {
+      return
+    }
+    const target = event.target
+    const anchor =
+      target instanceof Element
+        ? target.closest('a[data-timestamp]')
+        : null
+    if (!anchor) {
+      return
+    }
+    event.preventDefault()
+    seekFromAnchor(anchor)
+  }
 
   if (!html) {
     return null
@@ -1109,6 +1250,8 @@ function EpisodeShownotes({ shownotes }: { shownotes: string }) {
           overflowing && !expanded && 'notes-fold',
         )}
         data-expanded={expanded}
+        onClick={handleClick}
+        onKeyDown={handleKeyDown}
         dangerouslySetInnerHTML={{ __html: html }}
       />
       {overflowing ? (

@@ -69,7 +69,7 @@ const DROP_CONTENT_TAGS = new Set([
 ])
 
 const TAG_ATTRIBUTES: Record<string, Set<string>> = {
-  a: new Set(['href', 'title']),
+  a: new Set(['href', 'title', 'data-timestamp']),
   img: new Set(['src', 'alt', 'title', 'width', 'height']),
 }
 
@@ -162,6 +162,8 @@ function buildOpeningTag(
 ): string {
   const parts: string[] = []
   const allowed = TAG_ATTRIBUTES[name]
+  let hasHref = false
+  let hasTimestamp = false
 
   if (allowed) {
     const attributePattern =
@@ -181,6 +183,20 @@ function buildOpeningTag(
           continue
         }
         value = value.replace(/[\u0000-\u001f\u007f]/g, '').trim()
+        if (attribute === 'href') {
+          hasHref = true
+        }
+      } else if (attribute === 'data-timestamp') {
+        // Xiaoyuzhou marks seekable show-note times with `data-timestamp`
+        // (seconds). Only plain digits are accepted.
+        if (!/^\d{1,6}$/.test(value.trim())) {
+          continue
+        }
+        value = String(Number(value.trim()))
+        if (value === '0') {
+          continue
+        }
+        hasTimestamp = true
       } else if (attribute === 'width' || attribute === 'height') {
         value = value.replace(/[^0-9]/g, '')
         if (!value) {
@@ -193,8 +209,14 @@ function buildOpeningTag(
   }
 
   if (name === 'a') {
-    parts.push('target="_blank"')
-    parts.push('rel="noopener noreferrer nofollow"')
+    if (hasHref) {
+      parts.push('target="_blank"')
+      parts.push('rel="noopener noreferrer nofollow"')
+    } else if (hasTimestamp) {
+      // No href: the UI turns this into a seek button.
+      parts.push('role="button"')
+      parts.push('tabindex="0"')
+    }
   }
   if (name === 'img') {
     parts.push('loading="lazy"')

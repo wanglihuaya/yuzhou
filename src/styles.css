@@ -172,6 +172,27 @@
   text-decoration: underline;
 }
 
+.show-notes a[data-timestamp] {
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklab, var(--brand) 40%, transparent);
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+}
+
+.show-notes a[data-timestamp]:hover,
+.show-notes a[data-timestamp]:focus-visible {
+  text-decoration-color: var(--brand);
+  text-decoration-style: solid;
+}
+
+.show-notes a[data-timestamp]:focus-visible {
+  border-radius: 2px;
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
 .show-notes strong,
 .show-notes b {
   font-weight: 600;

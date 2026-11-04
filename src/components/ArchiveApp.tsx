@@ -15,7 +15,6 @@ import {
   ChevronDown,
   Clock,
   Copy,
-  Disc3,
   Download,
   ExternalLink,
   FileText,
@@ -30,7 +29,6 @@ import {
   Pause,
   Play,
   Search,
-  Smartphone,
   User,
   X,
 } from 'lucide-react'
@@ -38,6 +36,9 @@ import { toast } from 'sonner'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Cover } from '@/components/Cover'
+import { HotList } from '@/components/HotList'
+import { useLibrary } from '@/components/LibraryProvider'
 import {
   useAudioPlayer,
   type PlaybackTrack,
@@ -61,15 +62,13 @@ import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
-  addRecent,
   copyText,
   downloadFromCdn,
   downloadText,
-  loadRecent,
   registerServiceWorker,
   sleep,
-  type RecentItem,
 } from '@/lib/browser'
+import { type LibraryItem } from '@/lib/library'
 import {
   getDownloadProgress,
   subscribeDownloadProgress,
@@ -105,10 +104,6 @@ import {
 } from '@/lib/xiaoyuzhou'
 import { cn } from '@/lib/utils'
 
-const EXAMPLE_EPISODE =
-  'https://www.xiaoyuzhoufm.com/episode/6ae967cec96c8942ec167f82'
-const EXAMPLE_PODCAST =
-  'https://www.xiaoyuzhoufm.com/podcast/682c566cc7c5f17595635a2c'
 const BASE_TITLE = '宇宙备份 · 小宇宙音频播放与下载'
 
 type Status = 'idle' | 'loading' | 'ready' | 'error'
@@ -129,7 +124,7 @@ function canonicalUrl(data: ResolvedData): string {
     : `https://www.xiaoyuzhoufm.com/podcast/${data.podcast.pid}`
 }
 
-function recentlyResolved(data: ResolvedData): RecentItem {
+function recentlyResolved(data: ResolvedData): LibraryItem {
   if (data.kind === 'episode') {
     return {
       url: canonicalUrl(data),
@@ -153,6 +148,20 @@ function recentlyResolved(data: ResolvedData): RecentItem {
 
 function isPaid(episode: Episode): boolean {
   return episode.payType !== 'FREE' || episode.isPrivate
+}
+
+/** Favorites always point at the show, never at a single episode. */
+function podcastLibraryItem(
+  podcast: Pick<Podcast, 'pid' | 'title' | 'author' | 'imageUrl'>,
+): LibraryItem {
+  return {
+    url: `https://www.xiaoyuzhoufm.com/podcast/${podcast.pid}`,
+    title: podcast.title,
+    subtitle: podcast.author,
+    kind: 'podcast',
+    image: podcast.imageUrl,
+    at: Date.now(),
+  }
 }
 
 /** The episode as the global player needs it. Paid episodes never get here. */
@@ -204,11 +213,11 @@ function DownloadLink({
 }
 
 export function ArchiveApp({ urlParam, onUrlChange }: ArchiveAppProps) {
+  const { history, addHistory } = useLibrary()
   const [input, setInput] = useState(urlParam ?? '')
   const [status, setStatus] = useState<Status>('idle')
   const [result, setResult] = useState<ResolvedData | null>(null)
   const [error, setError] = useState('')
-  const [recent, setRecent] = useState<RecentItem[]>([])
   const [batch, setBatch] = useState<'audio' | 'cover' | null>(null)
   const [inWeChat, setInWeChat] = useState(false)
   const [wechatHint, setWechatHint] = useState<WeChatHintState>({
@@ -226,7 +235,6 @@ export function ArchiveApp({ urlParam, onUrlChange }: ArchiveAppProps) {
   )
 
   useEffect(() => {
-    setRecent(loadRecent())
     setInWeChat(isWeChatBrowser())
     registerServiceWorker()
   }, [])
@@ -277,7 +285,7 @@ export function ArchiveApp({ urlParam, onUrlChange }: ArchiveAppProps) {
 
         setResult(response.data)
         setStatus('ready')
-        setRecent(addRecent(recentlyResolved(response.data)))
+        addHistory(recentlyResolved(response.data))
 
         if (options?.scroll) {
           window.setTimeout(() => {
@@ -295,7 +303,7 @@ export function ArchiveApp({ urlParam, onUrlChange }: ArchiveAppProps) {
         setStatus('error')
       }
     },
-    [],
+    [addHistory],
   )
 
   useEffect(() => {
@@ -522,24 +530,12 @@ export function ArchiveApp({ urlParam, onUrlChange }: ArchiveAppProps) {
                 )}
               </Button>
             </div>
-
-            <div className="mt-3 flex flex-wrap items-center justify-center gap-x-2 gap-y-1.5 text-[12px] text-muted-foreground">
-              <span>示例</span>
-              <ExampleChip
-                label="单集 · 半拿铁"
-                onClick={() => resolveAndTrack(EXAMPLE_EPISODE)}
-              />
-              <ExampleChip
-                label="播客 · 半拿铁·周刊"
-                onClick={() => resolveAndTrack(EXAMPLE_PODCAST)}
-              />
-            </div>
           </form>
 
-          {recent.length > 0 ? (
+          {history.length > 0 ? (
             <div className="mx-auto mt-7 flex max-w-[640px] flex-wrap items-center justify-center gap-2">
               <span className="text-[11px] text-muted-foreground">最近</span>
-              {recent.map((item) => (
+              {history.slice(0, 6).map((item) => (
                 <button
                   key={item.url}
                   type="button"
@@ -560,6 +556,10 @@ export function ArchiveApp({ urlParam, onUrlChange }: ArchiveAppProps) {
             </div>
           ) : null}
         </section>
+
+        {!urlParam && status === 'idle' ? (
+          <HotList onOpen={(url) => resolveAndTrack(url)} />
+        ) : null}
 
         <div ref={resultRef} className="scroll-mt-24">
           {status === 'loading' ? <LoadingPanel /> : null}
@@ -583,14 +583,6 @@ export function ArchiveApp({ urlParam, onUrlChange }: ArchiveAppProps) {
                       className="h-9 rounded-[4px] px-3.5 text-[13px]"
                     >
                       重试
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => resolveAndTrack(EXAMPLE_EPISODE)}
-                      className="h-9 rounded-[4px] px-3.5 text-[13px]"
-                    >
-                      试试示例单集
                     </Button>
                   </div>
                 </div>
@@ -704,25 +696,20 @@ function TransferPanel({ transfer }: { transfer: DownloadProgressState | null })
 
 function WeChatNotice({ onCopy }: { onCopy: () => void }) {
   return (
-    <div className="mb-6 flex flex-col gap-3 rounded-[6px] border border-brand/15 bg-brand-muted p-4 sm:flex-row sm:items-center">
-      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-background/70 text-brand">
-        <Smartphone className="size-4" aria-hidden="true" />
-      </span>
+    <div className="mb-6 flex flex-col gap-2.5 rounded-[6px] border-l-2 border-brand bg-brand-muted px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
       <div className="min-w-0 flex-1">
         <p className="text-[13px] font-semibold">微信内无法直接保存文件</p>
         <p className="mt-0.5 text-[12px] leading-5 text-muted-foreground">
           点右上角 ···，选择「在浏览器打开」，再回到本页下载。
         </p>
       </div>
-      <Button
+      <button
         type="button"
-        variant="outline"
         onClick={onCopy}
-        className="h-9 shrink-0 rounded-[4px] px-3 text-[12px]"
+        className="shrink-0 self-start rounded-[4px] bg-background/80 px-3 py-1.5 text-[12px] font-medium text-brand transition-colors hover:bg-background sm:self-auto"
       >
-        <Copy className="size-3.5" />
         复制本页链接
-      </Button>
+      </button>
     </div>
   )
 }
@@ -799,60 +786,6 @@ function WeChatDownloadDialog({
   )
 }
 
-function ExampleChip({
-  label,
-  onClick,
-}: {
-  label: string
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="rounded-[3px] bg-brand-muted px-2 py-1 text-[12px] font-medium text-brand transition-colors hover:bg-brand/15"
-    >
-      {label}
-    </button>
-  )
-}
-
-function Cover({
-  src,
-  alt,
-  className,
-}: {
-  src: string
-  alt: string
-  className?: string
-}) {
-  const [failed, setFailed] = useState(false)
-
-  if (!src || failed) {
-    return (
-      <div
-        className={cn(
-          'grid place-items-center bg-muted text-muted-foreground',
-          className,
-        )}
-      >
-        <Disc3 className="size-1/3 opacity-40" aria-hidden="true" />
-      </div>
-    )
-  }
-
-  return (
-    <img
-      src={src}
-      alt={alt}
-      loading="lazy"
-      referrerPolicy="no-referrer"
-      onError={() => setFailed(true)}
-      className={cn('object-cover', className)}
-    />
-  )
-}
-
 function MetaItem({
   icon,
   children,
@@ -870,6 +803,7 @@ function MetaItem({
 
 function EpisodeResult({ episode }: { episode: Episode }) {
   const player = useAudioPlayer()
+  const { favorites, toggleFavorite } = useLibrary()
   const description = episode.shownotes
     ? htmlToText(episode.shownotes)
     : episode.description
@@ -879,6 +813,15 @@ function EpisodeResult({ episode }: { episode: Episode }) {
   const isPlaying = current && player.playing
   const audioName = episode.audioUrl ? audioFilename(episode) : ''
   const originalUrl = `https://www.xiaoyuzhoufm.com/episode/${episode.eid}`
+  const favoriteUrl = `https://www.xiaoyuzhoufm.com/podcast/${episode.podcast.pid}`
+  const favorited = favorites.some((item) => item.url === favoriteUrl)
+
+  function handleToggleFavorite() {
+    const next = toggleFavorite(podcastLibraryItem(episode.podcast))
+    toast.success(next ? '已收藏播客' : '已取消收藏', {
+      description: episode.podcast.title,
+    })
+  }
 
   async function handleCopyAudio() {
     const copied = await copyText(episode.audioUrl)
@@ -1000,6 +943,22 @@ function EpisodeResult({ episode }: { episode: Episode }) {
             {isPlaying ? '暂停' : '播放'}
           </Button>
         ) : null}
+
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleToggleFavorite}
+          aria-pressed={favorited}
+          className="h-10 rounded-[4px] px-3 text-[13px] sm:px-4"
+        >
+          <Heart
+            className={cn(
+              'size-4',
+              favorited && 'fill-current text-brand',
+            )}
+          />
+          {favorited ? '已收藏' : '收藏播客'}
+        </Button>
 
         {paid ? (
           <Button disabled className="h-10 rounded-[4px] px-3 text-[13px] sm:px-4">
@@ -1355,10 +1314,22 @@ function PodcastResult({
   onDownloadAllAudio: () => void
   onDownloadAllCovers: () => void
 }) {
+  const { favorites, toggleFavorite } = useLibrary()
   const originalUrl = `https://www.xiaoyuzhoufm.com/podcast/${podcast.pid}`
+  const favorited = favorites.some((item) => item.url === originalUrl)
   const downloadableCount = episodes.filter(
     (episode) => episode.audioUrl && !isPaid(episode),
   ).length
+  const playableTracks = episodes
+    .filter((episode) => !isPaid(episode) && Boolean(episode.audioUrl))
+    .map(playbackTrack)
+
+  function handleToggleFavorite() {
+    const next = toggleFavorite(podcastLibraryItem(podcast))
+    toast.success(next ? '已收藏播客' : '已取消收藏', {
+      description: podcast.title,
+    })
+  }
 
   async function handleCopyPodcast() {
     const copied = await copyText(originalUrl)
@@ -1420,6 +1391,22 @@ function PodcastResult({
               <Download className="size-4" />
             )}
             下载全部音频（{downloadableCount}）
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleToggleFavorite}
+            aria-pressed={favorited}
+            className="h-10 rounded-[4px] px-4 text-[13px]"
+          >
+            <Heart
+              className={cn(
+                'size-4',
+                favorited && 'fill-current text-brand',
+              )}
+            />
+            {favorited ? '已收藏' : '收藏播客'}
           </Button>
 
           <Button
@@ -1527,6 +1514,7 @@ function PodcastResult({
             <EpisodeRow
               key={episode.eid || `${episode.title}-${index}`}
               episode={episode}
+              playlist={playableTracks}
             />
           ))}
           {episodes.length === 0 ? (
@@ -1547,7 +1535,13 @@ function PodcastResult({
   )
 }
 
-function EpisodeRow({ episode }: { episode: Episode }) {
+function EpisodeRow({
+  episode,
+  playlist,
+}: {
+  episode: Episode
+  playlist?: PlaybackTrack[]
+}) {
   const player = useAudioPlayer()
   const paid = isPaid(episode)
   const playable = !paid && Boolean(episode.audioUrl)
@@ -1604,7 +1598,9 @@ function EpisodeRow({ episode }: { episode: Episode }) {
           <button
             type="button"
             onClick={() =>
-              current ? player.toggle() : player.play(playbackTrack(episode))
+              current
+                ? player.toggle()
+                : player.play(playbackTrack(episode), playlist)
             }
             aria-label={
               isPlaying ? `暂停 ${episode.title}` : `播放 ${episode.title}`

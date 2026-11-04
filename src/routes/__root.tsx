@@ -10,6 +10,11 @@ import Footer from '../components/Footer'
 import Header from '../components/Header'
 import { AudioPlayerProvider } from '../components/AudioPlayer'
 import { AppToaster } from '../components/AppToaster'
+import { LibraryProvider } from '../components/LibraryProvider'
+import {
+  DesktopLibrarySidebar,
+  MobileLibrarySheet,
+} from '../components/LibrarySidebar'
 
 import appCss from '../styles.css?url'
 
@@ -123,9 +128,13 @@ function RootDocument({ children }: { children: ReactNode }) {
       </head>
       <body className="flex min-h-dvh flex-col font-sans antialiased">
         <AudioPlayerProvider>
-          <Header />
-          <div className="flex flex-1 flex-col">{children}</div>
-          <Footer />
+          <LibraryProvider>
+            <Header />
+            <DesktopLibrarySidebar />
+            <div className="flex w-full flex-1 flex-col">{children}</div>
+            <Footer />
+            <MobileLibrarySheet />
+          </LibraryProvider>
         </AudioPlayerProvider>
         <AppToaster />
         <Scripts />

@@ -1,6 +1,8 @@
 import { Link } from '@tanstack/react-router'
 
 import { Brand } from './Logo'
+import { LibraryTrigger } from './LibrarySidebar'
+import { SearchCommand } from './SearchCommand'
 import ThemeToggle from './ThemeToggle'
 
 export default function Header() {
@@ -16,12 +18,8 @@ export default function Header() {
         </Link>
 
         <nav className="ml-auto flex items-center gap-1">
-          <a
-            href="#how"
-            className="hidden h-8 items-center rounded-[4px] px-2.5 text-[13px] text-muted-foreground no-underline transition-colors hover:bg-muted hover:text-foreground sm:inline-flex"
-          >
-            工作原理
-          </a>
+          <SearchCommand />
+          <LibraryTrigger />
           <ThemeToggle />
         </nav>
       </div>

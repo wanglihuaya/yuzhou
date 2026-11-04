@@ -4,19 +4,6 @@ import {
   setDownloadProgress,
 } from './download-progress'
 
-export type RecentKind = 'episode' | 'podcast'
-
-export interface RecentItem {
-  url: string
-  title: string
-  subtitle: string
-  kind: RecentKind
-  image: string
-  at: number
-}
-
-const RECENT_KEY = 'cosmos-archive:recent'
-
 export function triggerDownload(href: string): void {
   const anchor = document.createElement('a')
   anchor.href = href
@@ -321,52 +308,4 @@ export async function copyText(text: string): Promise<boolean> {
   const copied = document.execCommand('copy')
   textarea.remove()
   return copied
-}
-
-export function loadRecent(): RecentItem[] {
-  try {
-    const raw = window.localStorage.getItem(RECENT_KEY)
-    if (!raw) {
-      return []
-    }
-    const parsed: unknown = JSON.parse(raw)
-    if (!Array.isArray(parsed)) {
-      return []
-    }
-    return parsed
-      .filter((item): item is RecentItem => {
-        if (!item || typeof item !== 'object') {
-          return false
-        }
-        const record = item as Record<string, unknown>
-        return (
-          typeof record.url === 'string' &&
-          typeof record.title === 'string' &&
-          (record.kind === 'episode' || record.kind === 'podcast')
-        )
-      })
-      .slice(0, 6)
-  } catch {
-    return []
-  }
-}
-
-export function saveRecent(items: RecentItem[]): void {
-  try {
-    window.localStorage.setItem(
-      RECENT_KEY,
-      JSON.stringify(items.slice(0, 6)),
-    )
-  } catch {
-    // Storage is optional; ignore quota or privacy-mode failures.
-  }
-}
-
-export function addRecent(item: RecentItem): RecentItem[] {
-  const next = [
-    item,
-    ...loadRecent().filter((existing) => existing.url !== item.url),
-  ].slice(0, 6)
-  saveRecent(next)
-  return next
 }

@@ -2,7 +2,8 @@
 
 粘贴小宇宙（[xiaoyuzhoufm.com](https://www.xiaoyuzhoufm.com)）的单集或播客链接，解析、在线播放并下载：
 
-- 单集音频的网页内播放（底部播放器：进度拖动、后退 15 秒 / 前进 30 秒）
+- 单集音频的网页内播放（底部播放条；点击展开底部播放器：大封面、进度拖动、倍速、睡眠定时、后退 15 秒 / 前进 30 秒）
+- 播放列表：播客页播放时把公开单集加入队列，底部列表按钮展开队列，可切换、清除，播完自动下一集
 - `/episode/<id>`、`/podcast/<id>` 路径直达，支持把链接域名替换为 `xiaoyuzhoufm.dev`
 - 单集音频（`mp3` / `m4a` / `wav` / `ogg` / `flac` / `aac` 等）
 - 单集封面原图
@@ -11,8 +12,11 @@
 - 节目简介 `.txt`
 - 单集页的完整 shownotes（安全过滤后的富文本）与公开评论
 - 播客页最新单集的逐集下载与批量下载
+- 首页热榜：没有任何链接时展示近期热门单集，点击即可解析
+- 搜索：顶部搜索框或 `⌘K` / `Ctrl K` 打开命令面板，按关键词搜索单集并直接解析
+- 本地收藏与历史：桌面端右侧浮动栏（可收起、内部滚动）、移动端右上角抽屉，收藏播客或回看打开过的内容
 
-基于 **TanStack Start**（React 19 + Vite）与 **shadcn/ui** 构建，界面参照
+基于 **TanStack Start**（React 19 + Vite）、**shadcn/ui** 与 **Base UI**（播放器抽屉的 snap point）构建，界面参照
 [小宇宙单集页](https://www.xiaoyuzhoufm.com/episode/6ae876cf97726cd4675b98f1) 的视觉语言：
 白色纸面、顶部若隐若现的横线纸背景、焦糖橙（`#BE621C`）强调色、DIN Alternate /
 PingFang 字体组合，以及蓝绿渐变的星球标志。无需登录小宇宙账号。
@@ -52,13 +56,30 @@ pnpm start
 - 直接输入 24 位 ID：会先按单集解析，找不到再按播客解析
 - 从小宇宙 App 复制的分享文案：会自动提取其中的链接
 
-页面内可以直接试用两个示例：
-
-- 单集：<https://www.xiaoyuzhoufm.com/episode/6ae967cec96c8942ec167f82>
-- 播客：<https://www.xiaoyuzhoufm.com/podcast/682c566cc7c5f17595635a2c>
-
 解析结果会写入地址栏的 `?url=` 参数，方便直接分享或刷新恢复；通过
 `/episode/<id>`、`/podcast/<id>` 打开时则保留路径。
+
+收藏与历史只保存在当前浏览器的 `localStorage` 中：历史记录打开过的单集和播客，
+收藏记录点击收藏的播客（单集页收藏的是它所属的播客）。两者都不会上传到服务器。
+
+桌面端（≥ 1024px）下收藏与历史是一个浮动在页面最右侧的独立面板：固定在视口内、
+不随页面滚动，有最大高度，内容超出时在面板内部滚动；标题栏与顶部书签按钮都可以
+展开 / 收起，不使用遮罩或背景模糊。更窄的窗口和手机使用顶部右上角的抽屉：
+抽屉从屏幕顶部展开到最底部，背后带半透明遮罩与背景模糊。
+
+## 热榜
+
+首页在没有链接时展示「热榜」：近期热门单集，点击条目会直接进入解析流程。
+数据来自公开的 [中文播客榜](https://xyzrank.com)（无需登录），服务端抓取后缓存
+30 分钟；榜单不可用时会自动隐藏，不影响页面其他功能。
+
+## 搜索
+
+顶部导航的搜索框（移动端为放大镜图标）或 `⌘K` / `Ctrl K` 会打开命令面板：
+输入节目名、主播或关键词，结果以列表展示封面、播客名、时长与播放量，回车或点击
+即可进入解析流程。搜索同样使用公开的 [中文播客榜](https://xyzrank.com)
+接口（`/api/episodes?offset=0&limit=50&q=…`），由服务端请求并做 5 分钟内存缓存，
+避免浏览器跨域与重复请求；输入有 260ms 防抖，并处理加载、空结果与请求失败状态。
 
 ## 自定义域名（xiaoyuzhoufm.dev）
 
@@ -184,8 +205,18 @@ TanStack Start Server Function  ──►  https://www.xiaoyuzhoufm.com/episode|
 | `public/sw.js` | Service Worker：拦截 `/__cosmos_stream`，把 CDN 响应流交给浏览器下载管理器 |
 | `src/lib/browser.ts` | 下载策略：Service Worker → File System Access → Blob → 直链 |
 | `src/routes/api/download.ts` | 流式下载代理、域名白名单、中文文件名、Range 支持（兜底） |
-| `src/components/ArchiveApp.tsx` | 页面状态、单集/播客视图、播放入口、批量下载、微信下载提示 |
-| `src/components/AudioPlayer.tsx` | 全局播放器：音频状态、进度拖动、±15/30 秒、Media Session、底部播放条 |
+| `src/components/ArchiveApp.tsx` | 页面状态、单集/播客视图、播放入口、收藏、批量下载、微信下载提示 |
+| `src/components/AudioPlayer.tsx` | 全局播放器：底部播放条、Base UI Drawer 播放器 / 队列抽屉、倍速、播放队列、Media Session |
+| `src/components/LibraryProvider.tsx` | 收藏与历史状态、`localStorage` 读写、侧边栏开关 |
+| `src/components/LibrarySidebar.tsx` | 桌面右侧浮动面板、移动端抽屉、收藏/历史 tab 与列表 |
+| `src/components/HotList.tsx` | 首页热榜列表与加载占位 |
+| `src/lib/hot.ts` | 热榜数据抓取、字段归一化与 30 分钟缓存 |
+| `src/components/SearchCommand.tsx` | 顶部搜索入口、`⌘K` / `Ctrl K` 命令面板、结果列表与加载状态 |
+| `src/components/ui/command.tsx` | shadcn/ui 风格的 command 组件（基于 cmdk + Radix Dialog） |
+| `src/lib/search.ts` | 搜索 Server Function：参数校验、关键词截断与 5 分钟 LRU 缓存 |
+| `src/lib/xyzrank.ts` | 中文播客榜接口地址、归一化（时长分钟 → 秒）与公共类型 |
+| `src/components/Cover.tsx` | 封面图与加载失败占位 |
+| `src/lib/library.ts` | 收藏/历史数据结构、存储与去重、URL 归一化 |
 | `src/components/PathArchive.tsx` | 把 `/episode/<id>`、`/podcast/<id>` 路径接入现有解析页 |
 | `src/routes/episode.$eid.tsx` | 单集路径路由，校验 24 位 ID |
 | `src/routes/podcast.$pid.tsx` | 播客路径路由，校验 24 位 ID |
@@ -198,7 +229,9 @@ TanStack Start Server Function  ──►  https://www.xiaoyuzhoufm.com/episode|
 ## 实现细节
 
 - **播放**：音频直接由 CDN 流式播放，不经过本站服务器。播放器挂在根布局上，切换页面不会中断；播放状态、进度与音量交给浏览器原生 `<audio>`，并通过 Media Session API 接入系统锁屏 / 媒体键。付费或私有单集不会出现播放入口。
+- **播放器与队列**：点击底部播放条展开播放器抽屉（大封面、进度、±15/30 秒、倍速、15/30/45/60 分钟睡眠定时）；抽屉基于 Base UI Drawer 的 snap point，固定为视口高度的 3/5，顶部手柄可以向下拖动收起，点击抽屉外也会关闭。播放列表入口是控制区下方单独一行的列表图标，打开后只有顶部详情区换成队列列表，底部播放控制保持不变；在播客页播放时，当前可见的公开单集按列表顺序进入本场会话队列，可切换当前单集或清除其余条目，一集播完会自动播放队列中的下一集。队列只保存在内存中，刷新页面后重置。
 - **数据来源**：服务端 `fetch` 小宇宙公开网页，解析 `<script id="__NEXT_DATA__">` 中的 `pageProps`，不依赖需要登录的私有 API。
+- **搜索**：命令面板参考 shadcn/ui 的 Command Dialog（cmdk + Radix Dialog），`⌘K` / `Ctrl K` 全局唤起；查询经 260ms 防抖后调用 Server Function，由服务端请求中文播客榜的 `/api/episodes`，结果按关键词缓存 5 分钟（最多 30 条）。选中结果后跳转首页 `?url=`，复用现有解析流程；接口不返回封面或标题的条目会被丢弃。
 - **简介与评论**：`shownotes` 是 HTML，先经 `src/lib/sanitize.ts` 白名单过滤（只保留排版标签与 http/https/mailto 链接，丢弃脚本、样式、iframe 等）再渲染为富文本；评论取公开页面内的前 20 条，保留主播 / 置顶标记、点赞数与内嵌回复，评论正文始终按纯文本显示。
 - **缓存**：服务端内存缓存 5 分钟（最多 60 条），避免重复抓取页面。
 - **原图**：自动去掉 CDN 图片地址末尾的 `@small` / `@middle` / `@large` / `@thumbnail` 尺寸后缀。
@@ -217,6 +250,8 @@ TanStack Start Server Function  ──►  https://www.xiaoyuzhoufm.com/episode|
 - 微信内置浏览器不能直接保存文件，需要按页面提示在系统浏览器中打开。
 - iOS Safari 批量下载多个文件时可能逐次询问权限，请选择允许。
 - 小宇宙页面结构调整可能导致解析失败，此时可在服务端日志中查看抓取结果。
+- 热榜依赖第三方公开榜单「中文播客榜」的接口；接口不可用或格式变化时，热榜会自动隐藏，不影响解析与下载。
+- 播放器使用普通进度条：小宇宙公开页面没有逐集波形数据，而长播客在浏览器内完整解码的音频缓冲区过大，因此没有实现真实声纹；拖动进度条时会放大，便于查看当前位置。
 - 下载的文件仅供个人备份；请遵守平台规则与创作者版权，不要二次传播或商用。
 
 ## 免责声明

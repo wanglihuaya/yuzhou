@@ -294,14 +294,87 @@
 
 .player-seek:hover::-webkit-slider-thumb,
 .player-seek:focus-visible::-webkit-slider-thumb,
+.player-seek:active::-webkit-slider-thumb,
 .player-seek:hover::-moz-range-thumb,
-.player-seek:focus-visible::-moz-range-thumb {
+.player-seek:focus-visible::-moz-range-thumb,
+.player-seek:active::-moz-range-thumb {
   opacity: 1;
 }
 
 .player-seek:focus-visible {
   outline: 2px solid color-mix(in oklab, var(--brand) 45%, transparent);
   outline-offset: -2px;
+}
+
+/* ---- Search command ------------------------------------------------------
+   The palette sits near the top of the viewport rather than dead centre, so
+   results have room to unfold and the mobile keyboard never covers the input. */
+
+.command-dialog {
+  top: max(3.5rem, 7dvh);
+  translate: none;
+  transform: translateX(-50%);
+  padding: 0;
+}
+
+/* ---- Player drawer -------------------------------------------------------
+   The Base UI Drawer positions its popup with these variables: the snap-point
+   offset and the live finger movement. The sheet starts below the viewport and
+   rides up on open; dragging the handle moves it back down. */
+
+.player-drawer-backdrop {
+  --backdrop-opacity: 0.32;
+  background-color: #000;
+  opacity: var(--backdrop-opacity);
+  transition: opacity 360ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.player-drawer-backdrop[data-swiping] {
+  opacity: calc(var(--backdrop-opacity) * (1 - var(--drawer-swipe-progress)));
+  transition-duration: 0ms;
+}
+
+.player-drawer-backdrop[data-starting-style],
+.player-drawer-backdrop[data-ending-style] {
+  opacity: 0;
+}
+
+.player-drawer-popup {
+  display: flex;
+  flex-direction: column;
+  transform: translateY(
+    calc(
+      var(--drawer-snap-point-offset, 0px) + var(--drawer-swipe-movement-y, 0px)
+    )
+  );
+  padding-bottom: max(
+    0px,
+    calc(
+      var(--drawer-snap-point-offset, 0px) + var(--drawer-swipe-movement-y, 0px)
+    )
+  );
+  transition: transform 420ms cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: transform;
+}
+
+.player-drawer-popup[data-swiping] {
+  transition-duration: 0ms;
+}
+
+.player-drawer-popup[data-starting-style],
+.player-drawer-popup[data-ending-style] {
+  transform: translateY(calc(100% + 2px));
+}
+
+.player-drawer-popup[data-ending-style] {
+  transition-duration: calc(var(--drawer-swipe-strength, 1) * 420ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player-drawer-backdrop,
+  .player-drawer-popup {
+    transition-duration: 0ms;
+  }
 }
 
 /* ---- Motion ---------------------------------------------------------------

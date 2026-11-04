@@ -8,9 +8,21 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { Loader2, Pause, Play, RotateCcw, RotateCw, X } from 'lucide-react'
+import {
+  AudioLines,
+  List,
+  Loader2,
+  Moon,
+  Pause,
+  Play,
+  RotateCcw,
+  RotateCw,
+  X,
+} from 'lucide-react'
+import { Drawer } from '@base-ui/react/drawer'
 import { toast } from 'sonner'
 
+import { formatDuration } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 export interface PlaybackTrack {
@@ -30,11 +42,17 @@ interface AudioPlayerContextValue {
   loading: boolean
   currentTime: number
   duration: number
+  /** Session playlist, in display order. */
+  queue: PlaybackTrack[]
+  rate: number
   isCurrent: (id: string) => boolean
-  play: (track: PlaybackTrack) => void
+  play: (track: PlaybackTrack, queue?: PlaybackTrack[]) => void
   toggle: () => void
+  pause: () => void
   seek: (seconds: number) => void
   skip: (delta: number) => void
+  cycleRate: () => void
+  clearQueue: () => void
   close: () => void
 }
 
@@ -63,15 +81,43 @@ function clock(value: number): string {
   return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`
 }
 
+const RATES = [1, 1.25, 1.5, 2, 0.75] as const
+
+function dedupeQueue(queue: PlaybackTrack[]): PlaybackTrack[] {
+  const seen = new Set<string>()
+  return queue.filter((item) => {
+    if (seen.has(item.id)) {
+      return false
+    }
+    seen.add(item.id)
+    return true
+  })
+}
+
 export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const trackRef = useRef<PlaybackTrack | null>(null)
+  const queueRef = useRef<PlaybackTrack[]>([])
 
   const [track, setTrack] = useState<PlaybackTrack | null>(null)
   const [playing, setPlaying] = useState(false)
   const [loading, setLoading] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
+  const [queue, setQueue] = useState<PlaybackTrack[]>([])
+  const [rate, setRate] = useState(1)
+
+  useEffect(() => {
+    queueRef.current = queue
+  }, [queue])
+
+  useEffect(() => {
+    const audio = audioRef.current
+    if (audio) {
+      audio.defaultPlaybackRate = rate
+      audio.playbackRate = rate
+    }
+  }, [rate, track])
 
   const reportFailure = useCallback((error?: unknown) => {
     if (error instanceof DOMException && error.name === 'AbortError') {
@@ -107,10 +153,25 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   )
 
   const play = useCallback(
-    (next: PlaybackTrack) => {
+    (next: PlaybackTrack, nextQueue?: PlaybackTrack[]) => {
       const audio = audioRef.current
       if (!audio) {
         return
+      }
+
+      if (nextQueue) {
+        const merged = dedupeQueue(
+          nextQueue.some((item) => item.id === next.id)
+            ? nextQueue
+            : [next, ...nextQueue],
+        )
+        setQueue(merged)
+      } else {
+        setQueue((current) =>
+          current.some((item) => item.id === next.id)
+            ? current
+            : [...current, next],
+        )
       }
 
       if (trackRef.current?.id !== next.id) {
@@ -120,11 +181,12 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
         setDuration(next.duration || 0)
         audio.src = next.src
         audio.load()
+        audio.playbackRate = rate
       }
 
       startPlayback(audio)
     },
-    [startPlayback],
+    [rate, startPlayback],
   )
 
   const toggle = useCallback(() => {
@@ -139,6 +201,10 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
       audio.pause()
     }
   }, [startPlayback])
+
+  const pause = useCallback(() => {
+    audioRef.current?.pause()
+  }, [])
 
   const seek = useCallback((seconds: number) => {
     const audio = audioRef.current
@@ -171,9 +237,22 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     [seek],
   )
 
+  const cycleRate = useCallback(() => {
+    setRate((current) => {
+      const index = RATES.indexOf(current as (typeof RATES)[number])
+      return RATES[(index + 1) % RATES.length]
+    })
+  }, [])
+
+  const clearQueue = useCallback(() => {
+    const current = trackRef.current
+    setQueue(current ? [current] : [])
+  }, [])
+
   const close = useCallback(() => {
     const audio = audioRef.current
     trackRef.current = null
+    queueRef.current = []
 
     if (audio) {
       audio.pause()
@@ -182,6 +261,7 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     }
 
     setTrack(null)
+    setQueue([])
     setPlaying(false)
     setLoading(false)
     setCurrentTime(0)
@@ -293,14 +373,19 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
       loading,
       currentTime,
       duration: duration || track?.duration || 0,
+      queue,
+      rate,
       isCurrent: (id) => track?.id === id,
       play,
       toggle,
+      pause,
       seek,
       skip,
+      cycleRate,
+      clearQueue,
       close,
     }),
-    [track, playing, loading, currentTime, duration, play, toggle, seek, skip, close],
+    [track, playing, loading, currentTime, duration, queue, rate, play, toggle, pause, seek, skip, cycleRate, clearQueue, close],
   )
 
   return (
@@ -333,6 +418,18 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
         onPlaying={() => setLoading(false)}
         onCanPlay={() => setLoading(false)}
         onEnded={(event) => {
+          const current = trackRef.current
+          const list = queueRef.current
+          const index = current
+            ? list.findIndex((item) => item.id === current.id)
+            : -1
+          const next = index >= 0 ? list[index + 1] : undefined
+
+          if (next) {
+            play(next)
+            return
+          }
+
           setPlaying(false)
           setCurrentTime(event.currentTarget.duration || 0)
         }}
@@ -351,10 +448,12 @@ function SkipButton({
   seconds,
   direction,
   onClick,
+  large = false,
 }: {
   seconds: number
   direction: 'back' | 'forward'
   onClick: () => void
+  large?: boolean
 }) {
   const Icon = direction === 'back' ? RotateCcw : RotateCw
 
@@ -364,10 +463,22 @@ function SkipButton({
       onClick={onClick}
       aria-label={direction === 'back' ? `后退 ${seconds} 秒` : `前进 ${seconds} 秒`}
       title={direction === 'back' ? `后退 ${seconds} 秒` : `前进 ${seconds} 秒`}
-      className="relative grid size-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none sm:size-9"
+      className={cn(
+        'relative grid place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none',
+        large ? 'size-11' : 'size-8 sm:size-9',
+      )}
     >
-      <Icon className="size-[21px]" strokeWidth={1.7} aria-hidden="true" />
-      <span className="pointer-events-none absolute inset-0 grid place-items-center pt-px text-[7.5px] leading-none font-semibold tracking-tight">
+      <Icon
+        className={large ? 'size-7' : 'size-[21px]'}
+        strokeWidth={1.7}
+        aria-hidden="true"
+      />
+      <span
+        className={cn(
+          'pointer-events-none absolute inset-0 grid place-items-center pt-px font-semibold tracking-tight',
+          large ? 'text-[9px]' : 'text-[7.5px] leading-none',
+        )}
+      >
         {seconds}
       </span>
     </button>
@@ -386,6 +497,13 @@ function AudioPlayerBar() {
     skip,
     close,
   } = useAudioPlayer()
+  const [sheetOpen, setSheetOpen] = useState(false)
+
+  useEffect(() => {
+    if (!track) {
+      setSheetOpen(false)
+    }
+  }, [track])
 
   if (!track) {
     return null
@@ -426,28 +544,36 @@ function AudioPlayerBar() {
           />
 
           <div className="mx-auto flex w-full max-w-[980px] items-center gap-2.5 px-4 pt-4 pb-2.5 sm:gap-3 sm:px-6 sm:pt-3">
-            <span className="relative size-10 shrink-0 overflow-hidden rounded-[3px] bg-muted">
-              {track.cover ? (
-                <img
-                  src={track.cover}
-                  alt=""
-                  className="size-full object-cover"
-                  referrerPolicy="no-referrer"
-                />
-              ) : null}
-            </span>
+            <button
+              type="button"
+              onClick={() => setSheetOpen(true)}
+              aria-label="展开播放器"
+              title="展开播放器"
+              className="flex min-w-0 flex-1 items-center gap-2.5 rounded-[4px] text-left focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none sm:gap-3"
+            >
+              <span className="relative size-10 shrink-0 overflow-hidden rounded-[3px] bg-muted">
+                {track.cover ? (
+                  <img
+                    src={track.cover}
+                    alt=""
+                    className="size-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : null}
+              </span>
 
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[13px] leading-5 font-medium text-foreground">
-                {track.title}
-              </p>
-              <p className="mt-0.5 flex items-center gap-1.5 text-[11px] leading-4 text-muted-foreground">
-                <span className="truncate">{track.podcast}</span>
-                <span className="shrink-0 tabular-nums">
-                  {clock(currentTime)} / {clock(total)}
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[13px] leading-5 font-medium text-foreground">
+                  {track.title}
                 </span>
-              </p>
-            </div>
+                <span className="mt-0.5 flex items-center gap-1.5 text-[11px] leading-4 text-muted-foreground">
+                  <span className="truncate">{track.podcast}</span>
+                  <span className="shrink-0 tabular-nums">
+                    {clock(currentTime)} / {clock(total)}
+                  </span>
+                </span>
+              </span>
+            </button>
 
             <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
               <SkipButton seconds={15} direction="back" onClick={() => skip(-15)} />
@@ -484,6 +610,434 @@ function AudioPlayerBar() {
           </div>
         </div>
       </section>
+
+      <PlayerSheet open={sheetOpen} onOpenChange={setSheetOpen} />
     </>
+  )
+}
+
+/** Fraction of the viewport the player sheet occupies. */
+const DRAWER_SNAP_POINT = 0.6
+const SLEEP_OPTIONS = [15, 30, 45, 60] as const
+
+/** Full player in a bottom sheet, opened from the mini bar. */
+function PlayerSheet({
+  open,
+  onOpenChange,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const {
+    track,
+    playing,
+    loading,
+    currentTime,
+    duration,
+    queue,
+    rate,
+    toggle,
+    seek,
+    skip,
+    cycleRate,
+    clearQueue,
+    play,
+    pause,
+  } = useAudioPlayer()
+  const [showQueue, setShowQueue] = useState(false)
+  const [seeking, setSeeking] = useState(false)
+  const [sleepUntil, setSleepUntil] = useState<number | null>(null)
+  const [sleepNow, setSleepNow] = useState(() => Date.now())
+  const [sleepMenuOpen, setSleepMenuOpen] = useState(false)
+  const sleepMenuRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!sleepMenuOpen) {
+      return
+    }
+
+    const closeOnOutside = (event: PointerEvent) => {
+      if (!sleepMenuRef.current?.contains(event.target as Node)) {
+        setSleepMenuOpen(false)
+      }
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        // Close only the menu; the drawer stays open.
+        event.stopPropagation()
+        setSleepMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('pointerdown', closeOnOutside)
+    window.addEventListener('keydown', closeOnEscape, true)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutside)
+      window.removeEventListener('keydown', closeOnEscape, true)
+    }
+  }, [sleepMenuOpen])
+
+  useEffect(() => {
+    if (!sleepUntil) {
+      return
+    }
+
+    const tick = () => {
+      if (sleepUntil - Date.now() <= 0) {
+        pause()
+        setSleepUntil(null)
+        onOpenChange(false)
+        toast.success('睡眠定时结束，已暂停播放')
+        return
+      }
+      setSleepNow(Date.now())
+    }
+
+    tick()
+    const interval = window.setInterval(tick, 1000)
+    return () => window.clearInterval(interval)
+  }, [sleepUntil, pause, onOpenChange])
+
+  // A pointer released outside the scrubber should still restore its size.
+  useEffect(() => {
+    if (!seeking) {
+      return
+    }
+
+    const stopSeeking = () => setSeeking(false)
+    window.addEventListener('pointerup', stopSeeking)
+    window.addEventListener('pointercancel', stopSeeking)
+    return () => {
+      window.removeEventListener('pointerup', stopSeeking)
+      window.removeEventListener('pointercancel', stopSeeking)
+    }
+  }, [seeking])
+
+  function startSleep(minutes: number) {
+    const now = Date.now()
+    setSleepNow(now)
+    setSleepUntil(now + minutes * 60_000)
+    setSleepMenuOpen(false)
+    toast.success(`将在 ${minutes} 分钟后暂停播放`)
+  }
+
+  function cancelSleep() {
+    setSleepUntil(null)
+    setSleepMenuOpen(false)
+    toast('已取消睡眠定时')
+  }
+
+  if (!track) {
+    return null
+  }
+
+  const total = duration || track.duration || 0
+  const percent = total > 0 ? Math.min(100, (currentTime / total) * 100) : 0
+  const remaining = Math.max(0, total - currentTime)
+  const sleepMinutesLeft = sleepUntil
+    ? Math.max(0, Math.ceil((sleepUntil - sleepNow) / 60_000))
+    : null
+
+  return (
+    <Drawer.Root
+      open={open}
+      onOpenChange={onOpenChange}
+      onOpenChangeComplete={(nextOpen) => {
+        if (!nextOpen) {
+          setShowQueue(false)
+          setSleepMenuOpen(false)
+        }
+      }}
+      snapPoints={[DRAWER_SNAP_POINT]}
+      snapPoint={DRAWER_SNAP_POINT}
+      // The sheet keeps a fixed height; dragging the handle down still dismisses.
+      onSnapPointChange={() => {}}
+    >
+      <Drawer.Portal>
+        <Drawer.Backdrop className="player-drawer-backdrop fixed inset-0 z-50 bg-black" />
+        <Drawer.Viewport className="fixed inset-0 z-50 flex items-end justify-center">
+          <Drawer.Popup className="player-drawer-popup h-[60dvh] w-full max-w-[480px] overflow-hidden rounded-t-[16px] border border-b-0 border-border bg-background shadow-[0_-24px_60px_-24px_rgb(0_0_0/0.45)] outline-none sm:mb-4 sm:rounded-[12px] sm:border-b">
+            {/* Only the handle starts a swipe; the content below opts out. */}
+            <div
+              className="flex h-7 shrink-0 cursor-grab touch-none items-center justify-center select-none active:cursor-grabbing"
+              aria-hidden="true"
+            >
+              <span className="h-1 w-10 rounded-full bg-border" />
+            </div>
+
+            <Drawer.Content
+              data-base-ui-swipe-ignore
+              className="flex min-h-0 flex-1 flex-col px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]"
+            >
+              <Drawer.Title className="sr-only">
+                正在播放：{track.title}
+              </Drawer.Title>
+              <Drawer.Description className="sr-only">
+                播放进度、倍速与播放列表
+              </Drawer.Description>
+
+              {showQueue ? (
+                <div className="flex min-h-0 flex-1 flex-col pt-1">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-heading text-[16px] font-bold tracking-[-0.01em] text-foreground">
+                      队列
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={clearQueue}
+                      disabled={queue.length <= 1}
+                      className="rounded-[3px] px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+                    >
+                      清除
+                    </button>
+                  </div>
+
+                  <div className="mt-1 min-h-0 flex-1 overflow-y-auto overscroll-contain">
+                    {queue.length > 0 ? (
+                      queue.map((item) => {
+                        const active = item.id === track.id
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => (active ? toggle() : play(item))}
+                            className={cn(
+                              'flex w-full items-center gap-3 rounded-[4px] px-2 py-2 text-left transition-colors hover:bg-muted',
+                              active && 'bg-brand-muted/70 hover:bg-brand-muted',
+                            )}
+                          >
+                            <span className="size-10 shrink-0 overflow-hidden rounded-[4px] bg-muted">
+                              {item.cover ? (
+                                <img
+                                  src={item.cover}
+                                  alt=""
+                                  className="size-full object-cover"
+                                  referrerPolicy="no-referrer"
+                                />
+                              ) : null}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span
+                                className={cn(
+                                  'block truncate text-[13px] leading-5 font-medium',
+                                  active ? 'text-brand' : 'text-foreground',
+                                )}
+                              >
+                                {item.title}
+                              </span>
+                              <span className="block truncate text-[11px] leading-4 text-muted-foreground">
+                                {item.podcast}
+                                {item.duration > 0
+                                  ? ` · ${formatDuration(item.duration)}`
+                                  : ''}
+                              </span>
+                            </span>
+                            {active ? (
+                              <AudioLines
+                                className="size-4 shrink-0 text-brand"
+                                aria-hidden="true"
+                              />
+                            ) : null}
+                          </button>
+                        )
+                      })
+                    ) : (
+                      <p className="py-8 text-center text-[12px] text-muted-foreground">
+                        队列是空的。
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="min-h-0 flex-1 overflow-y-auto pt-1">
+                  <div className="flex min-h-full flex-col justify-center py-2">
+                    <div className="mx-auto aspect-square w-[min(42vw,200px)] overflow-hidden rounded-[8px] bg-muted shadow-[0_18px_40px_-24px_rgb(0_0_0/0.5)]">
+                      {track.cover ? (
+                        <img
+                          src={track.cover}
+                          alt=""
+                          className="size-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : null}
+                    </div>
+
+                    <p className="mt-4 text-[11px] font-medium text-brand">
+                      {track.podcast}
+                    </p>
+                    <h2 className="mt-1 line-clamp-2 text-[17px] leading-6 font-semibold tracking-[-0.01em] text-foreground">
+                      {track.title}
+                    </h2>
+                  </div>
+                </div>
+              )}
+
+              <div className="shrink-0">
+                <div
+                  className={cn(
+                    'relative mt-3 h-5 w-full origin-center transition-transform duration-150',
+                    seeking && 'scale-y-[1.7]',
+                  )}
+                >
+                  <div
+                    className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 overflow-hidden rounded-full bg-muted"
+                    aria-hidden="true"
+                  >
+                    <div
+                      className="h-full rounded-full bg-brand"
+                      style={{ width: `${percent}%` }}
+                    />
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={total || 0}
+                    step={0.1}
+                    value={Math.min(currentTime, total || currentTime)}
+                    onChange={(event) => seek(Number(event.target.value))}
+                    onPointerDown={() => setSeeking(true)}
+                    onPointerUp={() => setSeeking(false)}
+                    onPointerCancel={() => setSeeking(false)}
+                    onLostPointerCapture={() => setSeeking(false)}
+                    onBlur={() => setSeeking(false)}
+                    aria-label="播放进度"
+                    aria-valuetext={`${clock(currentTime)} / ${clock(total)}`}
+                    className="player-seek absolute inset-0 h-5 w-full"
+                  />
+                </div>
+                <div className="mt-0.5 flex items-center justify-between text-[11px] tabular-nums text-muted-foreground">
+                  <span>{clock(currentTime)}</span>
+                  <span>-{clock(remaining)}</span>
+                </div>
+
+                <div className="mt-3 grid grid-cols-5 items-center justify-items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={cycleRate}
+                    aria-label={`播放速度 ${rate} 倍`}
+                    title="切换播放速度"
+                    className="grid h-11 min-w-11 place-items-center rounded-full px-2 text-[12px] font-semibold tabular-nums text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none"
+                  >
+                    {rate}×
+                  </button>
+                  <SkipButton
+                    large
+                    seconds={15}
+                    direction="back"
+                    onClick={() => skip(-15)}
+                  />
+                  <button
+                    type="button"
+                    onClick={toggle}
+                    aria-label={playing ? '暂停' : '播放'}
+                    title={playing ? '暂停' : '播放'}
+                    className="grid size-14 place-items-center rounded-full bg-brand text-brand-foreground transition-[background-color,transform] duration-150 hover:bg-brand/90 active:scale-95 focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
+                  >
+                    {loading ? (
+                      <Loader2 className="size-5 animate-spin" />
+                    ) : playing ? (
+                      <Pause className="size-5 fill-current" />
+                    ) : (
+                      <Play className="ml-0.5 size-5 fill-current" />
+                    )}
+                  </button>
+                  <SkipButton
+                    large
+                    seconds={30}
+                    direction="forward"
+                    onClick={() => skip(30)}
+                  />
+
+                  <div ref={sleepMenuRef} className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setSleepMenuOpen((current) => !current)}
+                      aria-label={
+                        sleepMinutesLeft !== null
+                          ? `睡眠定时，${sleepMinutesLeft} 分钟后暂停`
+                          : '睡眠定时'
+                      }
+                      aria-haspopup="menu"
+                      aria-expanded={sleepMenuOpen}
+                      title={
+                        sleepMinutesLeft !== null
+                          ? `睡眠定时：${sleepMinutesLeft} 分钟后暂停`
+                          : '睡眠定时'
+                      }
+                      className={cn(
+                        'grid h-11 min-w-11 place-items-center rounded-full px-2 text-[12px] font-semibold tabular-nums transition-colors focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none',
+                        sleepMinutesLeft !== null
+                          ? 'text-brand hover:bg-brand-muted/70'
+                          : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                      )}
+                    >
+                      {sleepMinutesLeft !== null ? (
+                        `${sleepMinutesLeft}′`
+                      ) : (
+                        <Moon className="size-5" strokeWidth={1.7} />
+                      )}
+                    </button>
+
+                    {sleepMenuOpen ? (
+                      <div
+                        role="menu"
+                        aria-label="睡眠定时"
+                        className="absolute right-0 bottom-full z-10 mb-2 w-44 rounded-[6px] border border-border bg-background p-1 shadow-[0_12px_32px_-16px_rgb(0_0_0/0.45)]"
+                      >
+                        <p className="px-2 py-1 text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
+                          睡眠定时
+                        </p>
+                        <div className="grid grid-cols-2 gap-1">
+                          {SLEEP_OPTIONS.map((minutes) => (
+                            <button
+                              key={minutes}
+                              type="button"
+                              role="menuitem"
+                              onClick={() => startSleep(minutes)}
+                              className="rounded-[4px] px-2 py-2 text-[12px] text-foreground transition-colors hover:bg-muted"
+                            >
+                              {minutes} 分钟
+                            </button>
+                          ))}
+                        </div>
+                        {sleepMinutesLeft !== null ? (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={cancelSleep}
+                            className="mt-1 w-full rounded-[4px] px-2 py-2 text-left text-[12px] text-destructive transition-colors hover:bg-muted"
+                          >
+                            关闭定时
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+
+                {/* Secondary actions live on their own centered row. */}
+                <div className="mt-1 flex h-10 items-center justify-center">
+                  <button
+                    type="button"
+                    onClick={() => setShowQueue((current) => !current)}
+                    aria-label={showQueue ? '收起播放列表' : '播放列表'}
+                    aria-pressed={showQueue}
+                    title={showQueue ? '收起播放列表' : '播放列表'}
+                    className={cn(
+                      'grid size-10 place-items-center rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none',
+                      showQueue
+                        ? 'bg-brand-muted text-brand hover:bg-brand-muted/80'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                    )}
+                  >
+                    <List className="size-5" strokeWidth={1.8} />
+                  </button>
+                </div>
+              </div>
+            </Drawer.Content>
+          </Drawer.Popup>
+        </Drawer.Viewport>
+      </Drawer.Portal>
+    </Drawer.Root>
   )
 }

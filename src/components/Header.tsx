@@ -1,9 +1,7 @@
 import { Link } from '@tanstack/react-router'
 
-import { Brand, GithubMark } from './Logo'
+import { Brand } from './Logo'
 import ThemeToggle from './ThemeToggle'
-
-const REPO_URL = 'https://github.com/wanglihuaya/yuzhou'
 
 export default function Header() {
   return (
@@ -23,24 +21,6 @@ export default function Header() {
             className="hidden h-8 items-center rounded-[4px] px-2.5 text-[13px] text-muted-foreground no-underline transition-colors hover:bg-muted hover:text-foreground sm:inline-flex"
           >
             工作原理
-          </a>
-          <a
-            href={REPO_URL}
-            target="_blank"
-            rel="noreferrer"
-            title="GitHub"
-            className="hidden h-8 items-center gap-1.5 rounded-[4px] px-2.5 text-[13px] text-muted-foreground no-underline transition-colors hover:bg-muted hover:text-foreground sm:inline-flex"
-          >
-            <GithubMark className="size-[15px]" />
-          </a>
-          <a
-            href={REPO_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="grid size-9 place-items-center rounded-[4px] text-muted-foreground no-underline transition-colors hover:bg-muted hover:text-foreground sm:hidden"
-            aria-label="在 GitHub 查看源码"
-          >
-            <GithubMark className="size-[18px]" />
           </a>
           <ThemeToggle />
         </nav>

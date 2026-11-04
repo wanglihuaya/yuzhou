@@ -75,6 +75,18 @@ export const Route = createRootRoute({
         href: appCss,
       },
     ],
+    scripts: [
+      {
+        src: 'https://analyse.commands.top/script.js',
+        defer: true,
+        'data-website-id': 'e9b8f8b7-14b1-4cca-bf45-28f9d641a39f',
+      },
+      {
+        src: 'https://analyse.commands.top/recorder.js',
+        defer: true,
+        'data-website-id': 'e9b8f8b7-14b1-4cca-bf45-28f9d641a39f',
+      },
+    ],
   }),
   shellComponent: RootDocument,
   notFoundComponent: NotFound,

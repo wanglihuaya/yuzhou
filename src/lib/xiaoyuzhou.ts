@@ -1,5 +1,7 @@
 import { createServerFn } from '@tanstack/react-start'
 
+import { sanitizeHtml } from './sanitize'
+
 const PAGE_ORIGIN = 'https://www.xiaoyuzhoufm.com'
 const CACHE_TTL = 5 * 60 * 1000
 const CACHE_LIMIT = 60
@@ -90,6 +92,33 @@ export interface Podcaster {
   avatar: ImageAsset | null
 }
 
+export interface CommentAuthor {
+  nickname: string
+  avatar: string
+  ipLoc: string
+}
+
+export interface CommentReply {
+  id: string
+  text: string
+  createdAt: string
+  likeCount: number
+  author: CommentAuthor
+  replyTo: string
+}
+
+export interface EpisodeComment {
+  id: string
+  text: string
+  createdAt: string
+  likeCount: number
+  pinned: boolean
+  authorAssociation: string
+  author: CommentAuthor
+  replies: CommentReply[]
+  replyCount: number
+}
+
 export interface Podcast {
   pid: string
   title: string
@@ -104,7 +133,7 @@ export interface Podcast {
 }
 
 export type ResolvedData =
-  | { kind: 'episode'; episode: Episode }
+  | { kind: 'episode'; episode: Episode; comments: EpisodeComment[] }
   | {
       kind: 'podcast'
       podcast: Podcast
@@ -252,7 +281,7 @@ function normalizeEpisode(raw: Raw, fallbackPodcast?: Podcast): Episode {
     pid: str(raw.pid) || podcast.pid,
     title: str(raw.title) || '未命名单集',
     description: str(raw.description),
-    shownotes: str(raw.shownotes),
+    shownotes: sanitizeHtml(str(raw.shownotes)),
     duration: num(raw.duration),
     pubDate: str(raw.pubDate),
     playCount: num(raw.playCount),
@@ -274,6 +303,61 @@ function normalizeEpisode(raw: Raw, fallbackPodcast?: Podcast): Episode {
       imageUrl: podcast.imageUrl,
       imageExt: podcast.imageExt,
     },
+  }
+}
+
+function normalizeCommentAuthor(value: unknown): CommentAuthor {
+  const author = asRecord(value) ?? {}
+  const avatar = imageAsset(asRecord(author.avatar)?.picture)
+
+  return {
+    nickname: str(author.nickname),
+    avatar: avatar?.url ?? '',
+    ipLoc: str(author.ipLoc),
+  }
+}
+
+function normalizeCommentReply(value: Raw): CommentReply {
+  const replyTo = asRecord(value.replyToComment)
+  const replyToAuthor = asRecord(replyTo?.author)
+  const author = normalizeCommentAuthor(value.author)
+
+  if (!author.ipLoc) {
+    author.ipLoc = str(value.ipLoc)
+  }
+
+  return {
+    id: str(value.id),
+    text: str(value.text),
+    createdAt: str(value.createdAt),
+    likeCount: num(value.likeCount),
+    author,
+    replyTo: str(replyToAuthor?.nickname),
+  }
+}
+
+function normalizeComment(value: Raw): EpisodeComment {
+  const replies = asArray(value.replies)
+    .map((item) => asRecord(item))
+    .filter((item): item is Raw => item !== null)
+    .map(normalizeCommentReply)
+    .filter((reply) => reply.text)
+
+  const author = normalizeCommentAuthor(value.author)
+  if (!author.ipLoc) {
+    author.ipLoc = str(value.ipLoc)
+  }
+
+  return {
+    id: str(value.id),
+    text: str(value.text),
+    createdAt: str(value.createdAt),
+    likeCount: num(value.likeCount),
+    pinned: bool(value.pinned),
+    authorAssociation: str(value.authorAssociation),
+    author,
+    replies,
+    replyCount: Math.max(num(value.replyCount), replies.length),
   }
 }
 
@@ -376,7 +460,13 @@ function toEpisodeResult(pageProps: Raw): ResolveResult {
     }
   }
 
-  return { ok: true, data: { kind: 'episode', episode: normalized } }
+  const comments = asArray(pageProps.comments)
+    .map((item) => asRecord(item))
+    .filter((item): item is Raw => item !== null)
+    .map(normalizeComment)
+    .filter((comment) => comment.id && comment.text)
+
+  return { ok: true, data: { kind: 'episode', episode: normalized, comments } }
 }
 
 function toPodcastResult(pageProps: Raw): ResolveResult {

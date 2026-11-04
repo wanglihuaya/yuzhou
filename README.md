@@ -7,6 +7,7 @@
 - 播客封面原图
 - 主播头像原图
 - 节目简介 `.txt`
+- 单集页的完整 shownotes（安全过滤后的富文本）与公开评论
 - 播客页最新单集的逐集下载与批量下载
 
 基于 **TanStack Start**（React 19 + Vite）与 **shadcn/ui** 构建，界面采用
@@ -91,31 +92,44 @@ TanStack Start Server Function  ──►  https://www.xiaoyuzhoufm.com/episode|
 返回结构化数据（音频直链、原图、简介、时长、发布时间…）
   │
   ▼
-浏览器发起下载  ──►  /api/download?url=…&filename=…
-                         │  校验目标域名
-                         │  跟随最多 5 次跳转
-                         ▼
-                     媒体 CDN（media.xyzcdn.net / image.xyzcdn.net）
+浏览器发起下载  ──►  媒体 CDN（media.xyzcdn.net / image.xyzcdn.net）
+                          ▲ 浏览器直连，不经过本站服务器
 ```
 
-### 为什么要经过 `/api/download` 代理？
+### 下载为什么不经过服务器？
 
-小宇宙的音频与图片位于 CDN，直接从网页 `<a download>` 下载会遇到：
+小宇宙的 CDN（`media.xyzcdn.net` / `image.xyzcdn.net`）返回
+`Access-Control-Allow-Origin: *`，允许网页直接读取，所以下载完全由浏览器完成。
+按能力从高到低：
 
-- 无法设置中文文件名（跨域时 `download` 属性被忽略）
-- 浏览器可能直接打开媒体而不是保存
-- 部分环境的跨域 / Referer 限制
+1. **Service Worker 流式中转（首选，桌面与手机通用）**：页面跳到同源的
+   `/__cosmos_stream?url=…&filename=…`，`public/sw.js` 拦截该请求，把 CDN
+   响应流原样返回并加上 `Content-Disposition: attachment`。下载交给浏览器
+   **原生下载管理器**：有进度、可后台、可断点续传，内存不随文件增长。
+2. **File System Access API**（桌面 Chromium）：`showSaveFilePicker` 直接
+   流式写入磁盘。手机浏览器均不支持该 API。
+3. **Blob 缓冲**：`fetch` 后生成 Blob 保存。桌面上限 120MB，手机 24–48MB
+   （按 `deviceMemory` 判断），避免长度音频撑爆内存。
+4. **直接打开 CDN 地址**：超过上限时退化为浏览器内联处理。
+5. `/api/download` 代理仅在以上全部失败时兜底。
 
-代理路由会流式转发文件，并写入 `Content-Disposition: attachment; filename*=UTF-8''…`，同时支持 `Range` 断点续传。
+服务端只负责解析页面数据，因此下载不消耗服务器带宽。
 
-**安全限制**：代理只允许 `https://*.xyzcdn.net` 与 `https://*.xiaoyuzhoufm.com`，每次跳转都会重新校验；其他域名统一返回 `403`。
+### `/api/download` 兜底代理
+
+代理路由仍然保留：流式转发文件，写入
+`Content-Disposition: attachment; filename*=UTF-8''…`，支持 `Range` 断点续传。
+**安全限制**：只允许 `https://*.xyzcdn.net` 与 `https://*.xiaoyuzhoufm.com`，其他域名统一返回 `403`。
 
 ## 核心文件
 
 | 文件 | 职责 |
 | --- | --- |
 | `src/lib/xiaoyuzhou.ts` | 链接解析、页面抓取、`__NEXT_DATA__` 提取、数据归一化、文件名生成 |
-| `src/routes/api/download.ts` | 流式下载代理、域名白名单、中文文件名、Range 支持 |
+| `src/lib/sanitize.ts` | 无依赖的白名单 HTML 过滤器：showednotes 富文本安全渲染 |
+| `public/sw.js` | Service Worker：拦截 `/__cosmos_stream`，把 CDN 响应流交给浏览器下载管理器 |
+| `src/lib/browser.ts` | 下载策略：Service Worker → File System Access → Blob → 直链 |
+| `src/routes/api/download.ts` | 流式下载代理、域名白名单、中文文件名、Range 支持（兜底） |
 | `src/components/ArchiveApp.tsx` | 页面状态、单集/播客视图、批量下载、微信下载提示 |
 | `src/routes/index.tsx` | `?url=` 搜索参数与首页入口 |
 | `src/styles.css` | Tailwind 入口、Geist 字体、页面级细节 |
@@ -126,6 +140,7 @@ TanStack Start Server Function  ──►  https://www.xiaoyuzhoufm.com/episode|
 ## 实现细节
 
 - **数据来源**：服务端 `fetch` 小宇宙公开网页，解析 `<script id="__NEXT_DATA__">` 中的 `pageProps`，不依赖需要登录的私有 API。
+- **简介与评论**：`shownotes` 是 HTML，先经 `src/lib/sanitize.ts` 白名单过滤（只保留排版标签与 http/https/mailto 链接，丢弃脚本、样式、iframe 等）再渲染为富文本；评论取公开页面内的前 20 条，保留主播 / 置顶标记、点赞数与内嵌回复，评论正文始终按纯文本显示。
 - **缓存**：服务端内存缓存 5 分钟（最多 60 条），避免重复抓取页面。
 - **原图**：自动去掉 CDN 图片地址末尾的 `@small` / `@middle` / `@large` / `@thumbnail` 尺寸后缀。
 - **文件名**：`单集标题 - 播客标题.ext`，自动过滤 `\ / : * ? " < > |` 等非法字符。

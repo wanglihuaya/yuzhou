@@ -3,6 +3,7 @@ import {
   useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type ComponentProps,
   type FormEvent,
   type ReactNode,
@@ -19,6 +20,7 @@ import {
   ExternalLink,
   FileText,
   HardDrive,
+  Heart,
   ImageDown,
   Layers,
   Link2,
@@ -31,6 +33,7 @@ import {
   Smartphone,
   Sparkles,
   Users,
+  X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -52,17 +55,31 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
+import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   addRecent,
   copyText,
+  downloadFromCdn,
   downloadText,
   loadRecent,
+  registerServiceWorker,
   sleep,
-  triggerDownload,
   type RecentItem,
 } from '@/lib/browser'
-import { formatBytes, formatCount, formatDate, formatDuration } from '@/lib/format'
+import {
+  getDownloadProgress,
+  subscribeDownloadProgress,
+  type DownloadProgressState,
+} from '@/lib/download-progress'
+import {
+  formatBytes,
+  formatCount,
+  formatDate,
+  formatDuration,
+  htmlToText,
+} from '@/lib/format'
+import { sanitizeHtml } from '@/lib/sanitize'
 import {
   absoluteHref,
   isWeChatBrowser,
@@ -77,7 +94,9 @@ import {
   downloadHref,
   notesFilename,
   resolveXiaoyuzhou,
+  type CommentReply,
   type Episode,
+  type EpisodeComment,
   type Podcast,
   type ResolvedData,
 } from '@/lib/xiaoyuzhou'
@@ -134,34 +153,34 @@ function isPaid(episode: Episode): boolean {
 }
 
 /** Downloads cannot start inside WeChat's webview; explain instead of failing. */
-function guardedDownload(href: string): void {
+function guardedDownload(url: string, filename: string): void {
   if (isWeChatBrowser()) {
-    signalWeChatDownloadBlocked(href)
+    signalWeChatDownloadBlocked(url)
     return
   }
-  triggerDownload(href)
+  // Pull the file straight from the CDN; the proxy route is only a fallback.
+  void downloadFromCdn(url, filename, downloadHref(url, filename))
 }
 
 /** An anchor download that hands over to the WeChat explanation when needed. */
 function DownloadLink({
-  href,
+  url,
+  filename,
   onClick,
   children,
   ...props
-}: ComponentProps<'a'> & { href: string }) {
+}: Omit<ComponentProps<'a'>, 'href'> & { url: string; filename: string }) {
   return (
     <a
-      href={href}
+      href={downloadHref(url, filename)}
       {...props}
       onClick={(event) => {
         onClick?.(event)
         if (event.defaultPrevented) {
           return
         }
-        if (isWeChatBrowser()) {
-          event.preventDefault()
-          signalWeChatDownloadBlocked(href)
-        }
+        event.preventDefault()
+        guardedDownload(url, filename)
       }}
     >
       {children}
@@ -184,10 +203,17 @@ export function ArchiveApp({ urlParam, onUrlChange }: ArchiveAppProps) {
   const requestSeq = useRef(0)
   const lastResolved = useRef<string | null>(null)
   const resultRef = useRef<HTMLDivElement | null>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
+  const transfer = useSyncExternalStore(
+    subscribeDownloadProgress,
+    getDownloadProgress,
+    () => null,
+  )
 
   useEffect(() => {
     setRecent(loadRecent())
     setInWeChat(isWeChatBrowser())
+    registerServiceWorker()
   }, [])
 
   useEffect(() => {
@@ -287,6 +313,15 @@ export function ArchiveApp({ urlParam, onUrlChange }: ArchiveAppProps) {
     resolveAndTrack(input)
   }
 
+  function clearInput() {
+    setInput('')
+    if (urlParam) {
+      lastResolved.current = null
+      onUrlChange('')
+    }
+    inputRef.current?.focus()
+  }
+
   async function copyPageLink() {
     if (typeof window === 'undefined') {
       return
@@ -332,15 +367,19 @@ export function ArchiveApp({ urlParam, onUrlChange }: ArchiveAppProps) {
     try {
       for (let index = 0; index < downloadable.length; index += 1) {
         const episode = downloadable[index]
-        triggerDownload(
-          downloadHref(episode.audioUrl, audioFilename(episode)),
+        const filename = audioFilename(episode)
+        await downloadFromCdn(
+          episode.audioUrl,
+          filename,
+          downloadHref(episode.audioUrl, filename),
+          { useFilePicker: false },
         )
         if (index < downloadable.length - 1) {
           await sleep(800)
         }
       }
-      toast.success(`已发起 ${downloadable.length} 个音频下载`, {
-        description: `${title} · 浏览器若提示“下载多个文件”，请选择允许。`,
+      toast.success(`已下载 ${downloadable.length} 个音频`, {
+        description: `${title} · 文件已保存到下载目录。`,
       })
     } finally {
       setBatch(null)
@@ -364,18 +403,19 @@ export function ArchiveApp({ urlParam, onUrlChange }: ArchiveAppProps) {
     try {
       for (let index = 0; index < downloadable.length; index += 1) {
         const episode = downloadable[index]
-        triggerDownload(
-          downloadHref(
-            episode.imageUrl,
-            coverFilename(episode.title, episode.imageExt),
-          ),
+        const filename = coverFilename(episode.title, episode.imageExt)
+        await downloadFromCdn(
+          episode.imageUrl,
+          filename,
+          downloadHref(episode.imageUrl, filename),
+          { useFilePicker: false },
         )
         if (index < downloadable.length - 1) {
           await sleep(800)
         }
       }
-      toast.success(`已发起 ${downloadable.length} 个封面下载`, {
-        description: `${title} · 浏览器若提示“下载多个文件”，请选择允许。`,
+      toast.success(`已下载 ${downloadable.length} 个封面`, {
+        description: `${title} · 文件已保存到下载目录。`,
       })
     } finally {
       setBatch(null)
@@ -411,16 +451,34 @@ export function ArchiveApp({ urlParam, onUrlChange }: ArchiveAppProps) {
             <div className="relative flex-1">
               <Link2 className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
+                ref={inputRef}
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape' && input) {
+                    event.preventDefault()
+                    clearInput()
+                  }
+                }}
                 placeholder="粘贴单集 / 播客链接，或 24 位 ID"
                 aria-label="小宇宙链接"
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
                 inputMode="url"
-                className="h-12 rounded-[0.9rem] border-0 bg-transparent pl-10 text-base shadow-none sm:h-11 md:text-[15px]"
+                className="h-12 rounded-[0.9rem] border-0 bg-transparent pr-12 pl-10 text-base shadow-none sm:h-11 md:text-[15px]"
               />
+              {input ? (
+                <button
+                  type="button"
+                  onClick={clearInput}
+                  aria-label="清空输入"
+                  title="清空输入"
+                  className="absolute top-1/2 right-2 grid size-8 -translate-y-1/2 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none sm:size-7"
+                >
+                  <X className="size-4" />
+                </button>
+              ) : null}
             </div>
             <Button
               type="submit"
@@ -519,7 +577,15 @@ export function ArchiveApp({ urlParam, onUrlChange }: ArchiveAppProps) {
         {status === 'ready' && result ? (
           <div className="mt-8 animate-rise">
             {result.kind === 'episode' ? (
-              <EpisodeResult episode={result.episode} />
+              <>
+                <EpisodeResult episode={result.episode} />
+                <EpisodeShownotes shownotes={result.episode.shownotes} />
+                <EpisodeComments
+                  comments={result.comments}
+                  total={result.episode.commentCount}
+                  episodeId={result.episode.eid}
+                />
+              </>
             ) : (
               <PodcastResult
                 podcast={result.podcast}
@@ -548,7 +614,59 @@ export function ArchiveApp({ urlParam, onUrlChange }: ArchiveAppProps) {
         onCopyPage={() => void copyPageLink()}
         onCopyDownload={(href) => void copyDownloadLink(href)}
       />
+
+      <TransferPanel transfer={transfer} />
     </main>
+  )
+}
+
+function TransferPanel({ transfer }: { transfer: DownloadProgressState | null }) {
+  if (!transfer) {
+    return null
+  }
+
+  const percent =
+    transfer.total && transfer.total > 0
+      ? Math.min(100, Math.round((transfer.received / transfer.total) * 100))
+      : null
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-50 rounded-[1.25rem] border border-border/60 bg-card/95 p-4 shadow-xl backdrop-blur sm:inset-x-auto sm:right-6 sm:w-80"
+    >
+      <div className="flex items-center gap-3">
+        <span className="grid size-8 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground">
+          {transfer.done ? (
+            <Check className="size-4" />
+          ) : (
+            <Download className="size-4 animate-pulse" />
+          )}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[13px] font-medium">{transfer.label}</p>
+          <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+            {transfer.done
+              ? '已保存'
+              : `${formatBytes(transfer.received)}${
+                  transfer.total ? ` / ${formatBytes(transfer.total)}` : ''
+                }`}
+          </p>
+        </div>
+        {percent !== null ? (
+          <span className="shrink-0 font-mono text-xs text-muted-foreground">
+            {percent}%
+          </span>
+        ) : null}
+      </div>
+      <Progress value={percent ?? 0} className="mt-3 h-1.5" />
+      <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+        {transfer.done
+          ? '下载完成。'
+          : '正在从 CDN 直连下载，完成后文件才会写入磁盘。'}
+      </p>
+    </div>
   )
 }
 
@@ -719,11 +837,11 @@ function MetaItem({
 }
 
 function EpisodeResult({ episode }: { episode: Episode }) {
-  const description = episode.shownotes || episode.description
+  const description = episode.shownotes
+    ? htmlToText(episode.shownotes)
+    : episode.description
   const paid = isPaid(episode)
-  const audioHref = episode.audioUrl
-    ? downloadHref(episode.audioUrl, audioFilename(episode))
-    : ''
+  const audioName = episode.audioUrl ? audioFilename(episode) : ''
   const originalUrl = `https://www.xiaoyuzhoufm.com/episode/${episode.eid}`
 
   async function handleCopyAudio() {
@@ -845,11 +963,15 @@ function EpisodeResult({ episode }: { episode: Episode }) {
               <Button disabled className="h-11 rounded-xl px-4 sm:h-10">
                 <Download className="size-4" /> 付费内容不可下载
               </Button>
-            ) : (
+            ) : episode.audioUrl ? (
               <Button asChild className="h-11 rounded-xl px-4 sm:h-10">
-                <DownloadLink href={audioHref}>
+                <DownloadLink url={episode.audioUrl} filename={audioName}>
                   <Download className="size-4" /> 下载音频
                 </DownloadLink>
+              </Button>
+            ) : (
+              <Button disabled className="h-11 rounded-xl px-4 sm:h-10">
+                <Download className="size-4" /> 暂无音频
               </Button>
             )}
 
@@ -859,10 +981,8 @@ function EpisodeResult({ episode }: { episode: Episode }) {
               className="h-11 rounded-xl px-4 sm:h-10"
             >
               <DownloadLink
-                href={downloadHref(
-                  episode.imageUrl,
-                  coverFilename(episode.title, episode.imageExt),
-                )}
+                url={episode.imageUrl}
+                filename={coverFilename(episode.title, episode.imageExt)}
               >
                 <ImageDown className="size-4" /> 下载封面
               </DownloadLink>
@@ -900,24 +1020,238 @@ function EpisodeResult({ episode }: { episode: Episode }) {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-
-          {description ? (
-            <details className="group mt-6 border-t border-border/60 pt-4">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium">
-                <span className="inline-flex items-center gap-2 text-muted-foreground">
-                  <FileText className="size-4" />
-                  节目简介
-                </span>
-                <ChevronDown className="size-4 text-muted-foreground transition group-open:rotate-180" />
-              </summary>
-              <div className="mt-3 max-h-72 overflow-y-auto pr-2 text-[13px] leading-6 whitespace-pre-wrap text-muted-foreground">
-                {description}
-              </div>
-            </details>
-          ) : null}
         </div>
       </div>
     </article>
+  )
+}
+
+function SectionHeading({
+  icon,
+  title,
+  aside,
+}: {
+  icon: ReactNode
+  title: string
+  aside?: ReactNode
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <h3 className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground">
+        {icon}
+        {title}
+      </h3>
+      {aside}
+    </div>
+  )
+}
+
+function EpisodeShownotes({ shownotes }: { shownotes: string }) {
+  const html = sanitizeHtml(shownotes)
+  if (!html) {
+    return null
+  }
+
+  return (
+    <section className="mt-4 rounded-[1.6rem] bg-card p-5 sm:p-7">
+      <SectionHeading
+        icon={<FileText className="size-4" />}
+        title="节目简介"
+        aside={
+          <span className="font-mono text-[10px] tracking-[0.18em] text-muted-foreground/60 uppercase">
+            Show notes
+          </span>
+        }
+      />
+      <div
+        className="prose prose-sm dark:prose-invert mt-4 max-w-none text-[13px] leading-6 text-foreground/90 prose-headings:mt-5 prose-headings:mb-2 prose-headings:text-[15px] prose-headings:font-medium prose-p:my-2 prose-p:max-w-[78ch] prose-a:text-brand prose-a:no-underline hover:prose-a:underline prose-blockquote:border-l-brand/50 prose-blockquote:text-muted-foreground prose-img:mx-auto prose-img:my-3 prose-img:max-h-[480px] prose-img:w-auto prose-img:rounded-xl prose-hr:my-4 prose-hr:border-border/60 prose-li:my-0.5 prose-li:max-w-[78ch]"
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+    </section>
+  )
+}
+
+function CommentReplyItem({ reply }: { reply: CommentReply }) {
+  return (
+    <div className="flex gap-2.5">
+      <Cover
+        src={reply.author.avatar}
+        alt=""
+        className="mt-0.5 size-6 shrink-0 rounded-full"
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
+          <span className="text-xs font-medium text-foreground">
+            {reply.author.nickname || '匿名听友'}
+          </span>
+          {reply.replyTo ? <span>回复 @{reply.replyTo}</span> : null}
+          {reply.createdAt ? (
+            <time dateTime={reply.createdAt}>{formatDate(reply.createdAt)}</time>
+          ) : null}
+        </div>
+        <p className="mt-1 text-[12.5px] leading-5 break-words whitespace-pre-wrap text-foreground/85">
+          {reply.text}
+        </p>
+        {reply.likeCount > 0 ? (
+          <span className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+            <Heart className="size-3" />
+            {formatCount(reply.likeCount)}
+          </span>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+function CommentItem({ comment }: { comment: EpisodeComment }) {
+  const [expanded, setExpanded] = useState(false)
+  const replies = expanded ? comment.replies : comment.replies.slice(0, 2)
+  const hiddenReplies = comment.replies.length - replies.length
+  const isPodcaster = comment.authorAssociation === 'PODCASTER'
+
+  return (
+    <li className="border-t border-border/60 py-5 first:border-t-0 first:pt-0 last:pb-0">
+      <div className="flex gap-3">
+        <Cover
+          src={comment.author.avatar}
+          alt=""
+          className="mt-0.5 size-8 shrink-0 rounded-full"
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="text-[13px] font-medium">
+              {comment.author.nickname || '匿名听友'}
+            </span>
+            {isPodcaster ? (
+              <Badge variant="secondary" className="h-5 rounded-full px-2 text-[10px]">
+                主播
+              </Badge>
+            ) : null}
+            {comment.pinned ? (
+              <Badge variant="outline" className="h-5 rounded-full px-2 text-[10px]">
+                置顶
+              </Badge>
+            ) : null}
+            {comment.createdAt ? (
+              <time
+                dateTime={comment.createdAt}
+                className="text-[11px] text-muted-foreground"
+              >
+                {formatDate(comment.createdAt)}
+              </time>
+            ) : null}
+            {comment.author.ipLoc ? (
+              <span className="text-[11px] text-muted-foreground/70">
+                {comment.author.ipLoc}
+              </span>
+            ) : null}
+          </div>
+
+          <p className="mt-2 text-[13px] leading-6 break-words whitespace-pre-wrap text-foreground/90">
+            {comment.text}
+          </p>
+
+          <div className="mt-2 flex items-center gap-3 text-[11px] text-muted-foreground">
+            <span className="inline-flex items-center gap-1">
+              <Heart className="size-3.5" />
+              {formatCount(comment.likeCount)}
+            </span>
+            {comment.replyCount > 0 ? (
+              <span className="inline-flex items-center gap-1">
+                <MessageCircle className="size-3.5" />
+                {formatCount(comment.replyCount)} 条回复
+              </span>
+            ) : null}
+          </div>
+
+          {comment.replies.length > 0 ? (
+            <div className="mt-3 space-y-3 rounded-2xl bg-muted/40 px-3 py-3">
+              {replies.map((reply) => (
+                <CommentReplyItem key={reply.id} reply={reply} />
+              ))}
+              {hiddenReplies > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setExpanded(true)}
+                  className="inline-flex items-center gap-1 text-[11px] text-brand transition-colors hover:underline"
+                >
+                  <ChevronDown className="size-3" />
+                  展开其余 {hiddenReplies} 条回复
+                </button>
+              ) : null}
+              {expanded && comment.replies.length > 2 ? (
+                <button
+                  type="button"
+                  onClick={() => setExpanded(false)}
+                  className="inline-flex items-center gap-1 text-[11px] text-brand transition-colors hover:underline"
+                >
+                  <ChevronDown className="size-3 rotate-180" />
+                  收起回复
+                </button>
+              ) : null}
+              {comment.replyCount > comment.replies.length ? (
+                <p className="text-[11px] text-muted-foreground/70">
+                  共 {formatCount(comment.replyCount)} 条回复，公开页面仅展示其中{' '}
+                  {comment.replies.length} 条。
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </li>
+  )
+}
+
+function EpisodeComments({
+  comments,
+  total,
+  episodeId,
+}: {
+  comments: EpisodeComment[]
+  total: number
+  episodeId: string
+}) {
+  if (comments.length === 0) {
+    return null
+  }
+
+  const shownTotal = Math.max(total, comments.length)
+
+  return (
+    <section className="mt-4 rounded-[1.6rem] bg-card p-5 sm:p-7">
+      <SectionHeading
+        icon={<MessageCircle className="size-4" />}
+        title="评论"
+        aside={
+          <span className="font-mono text-[10px] tracking-[0.18em] text-muted-foreground/60 uppercase">
+            {formatCount(shownTotal)} 条
+          </span>
+        }
+      />
+      <ul className="mt-4">
+        {comments.map((comment) => (
+          <CommentItem key={comment.id} comment={comment} />
+        ))}
+      </ul>
+      <p className="mt-5 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border/60 pt-4 text-[11px] text-muted-foreground">
+        <span>
+          公开页面仅展示前 {comments.length} 条评论
+          {shownTotal > comments.length
+            ? `，共 ${formatCount(shownTotal)} 条。`
+            : '。'}
+        </span>
+        <a
+          href={`https://www.xiaoyuzhoufm.com/episode/${episodeId}`}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1 text-brand no-underline hover:underline"
+        >
+          在小宇宙查看全部
+          <ExternalLink className="size-3" />
+        </a>
+      </p>
+    </section>
   )
 }
 
@@ -1028,10 +1362,8 @@ function PodcastResult({
                 className="h-11 rounded-xl px-4 sm:h-10"
               >
                 <DownloadLink
-                  href={downloadHref(
-                    podcast.imageUrl,
-                    coverFilename(podcast.title, podcast.imageExt),
-                  )}
+                  url={podcast.imageUrl}
+                  filename={coverFilename(podcast.title, podcast.imageExt)}
                 >
                   <ImageDown className="size-4" /> 播客封面
                 </DownloadLink>
@@ -1070,12 +1402,10 @@ function PodcastResult({
                             key={`${person.nickname}-${person.avatar.url}`}
                             onClick={() =>
                               guardedDownload(
-                                downloadHref(
-                                  person.avatar!.url,
-                                  avatarFilename(
-                                    person.nickname,
-                                    person.avatar!.ext,
-                                  ),
+                                person.avatar!.url,
+                                avatarFilename(
+                                  person.nickname,
+                                  person.avatar!.ext,
                                 ),
                               )
                             }
@@ -1214,7 +1544,8 @@ function EpisodeRow({ episode, index }: { episode: Episode; index: number }) {
             className="size-10 rounded-xl sm:size-8"
           >
             <DownloadLink
-              href={downloadHref(episode.audioUrl, audioFilename(episode))}
+              url={episode.audioUrl}
+              filename={audioFilename(episode)}
               aria-label={`下载 ${episode.title} 的音频`}
             >
               <Download className="size-4" />
@@ -1231,10 +1562,8 @@ function EpisodeRow({ episode, index }: { episode: Episode; index: number }) {
             className="size-10 rounded-xl sm:size-8"
           >
             <DownloadLink
-              href={downloadHref(
-                episode.imageUrl,
-                coverFilename(episode.title, episode.imageExt),
-              )}
+              url={episode.imageUrl}
+              filename={coverFilename(episode.title, episode.imageExt)}
               aria-label={`下载 ${episode.title} 的封面`}
             >
               <ImageDown className="size-4" />

@@ -757,8 +757,8 @@ function PlayerSheet({
     >
       <Drawer.Portal>
         <Drawer.Backdrop className="player-drawer-backdrop fixed inset-0 z-50 bg-black" />
-        <Drawer.Viewport className="fixed inset-0 z-50 flex items-end justify-center md:bottom-[63px] md:items-stretch md:justify-start">
-          <Drawer.Popup className="player-drawer-popup h-[60dvh] w-full max-w-[480px] overflow-hidden rounded-t-[16px] border border-b-0 border-border bg-background shadow-[0_-24px_60px_-24px_rgb(0_0_0/0.45)] outline-none sm:mb-4 sm:rounded-[12px] sm:border-b md:mb-0 md:h-full md:w-[420px] md:max-w-[420px] md:rounded-l-none md:rounded-r-[12px] md:shadow-[24px_0_60px_-24px_rgb(0_0_0/0.45)]">
+        <Drawer.Viewport className="fixed inset-0 z-50 flex items-end justify-center md:justify-end md:pr-6 md:pb-[calc(63px+env(safe-area-inset-bottom)+1rem)]">
+          <Drawer.Popup className="player-drawer-popup h-[60dvh] w-full max-w-[480px] overflow-hidden rounded-t-[16px] border border-b-0 border-border bg-background shadow-[0_-24px_60px_-24px_rgb(0_0_0/0.45)] outline-none sm:mb-4 sm:rounded-[12px] sm:border-b md:mb-0 md:h-[min(460px,55dvh)] md:w-[440px] md:max-w-[calc(100vw-3rem)] md:rounded-[12px] md:border-b md:shadow-[0_24px_64px_-24px_rgb(0_0_0/0.45)]">
             {/* Only the handle starts a swipe; the content below opts out. */}
             <div
               className="flex h-7 shrink-0 cursor-grab touch-none items-center justify-center select-none active:cursor-grabbing md:hidden"
@@ -878,8 +878,8 @@ function PlayerSheet({
                 </div>
               ) : (
                 <div className="min-h-0 flex-1 overflow-y-auto pt-1">
-                  <div className="flex min-h-full flex-col justify-center py-2">
-                    <div className="mx-auto aspect-square w-[min(42vw,200px)] overflow-hidden rounded-[8px] bg-muted shadow-[0_18px_40px_-24px_rgb(0_0_0/0.5)]">
+                  <div className="flex min-h-full flex-col justify-center py-2 md:py-1">
+                    <div className="mx-auto aspect-square w-[min(42vw,200px)] overflow-hidden rounded-[8px] bg-muted shadow-[0_18px_40px_-24px_rgb(0_0_0/0.5)] md:w-[clamp(100px,15dvh,144px)]">
                       {track.cover ? (
                         <img
                           src={track.cover}

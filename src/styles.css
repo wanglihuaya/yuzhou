@@ -312,8 +312,12 @@
 
 .command-dialog {
   top: max(3.5rem, 7dvh);
-  translate: none;
-  transform: translateX(-50%);
+  /* Re-center horizontally with the `translate` property itself. Writing
+     `translate: none` + `transform: translateX(-50%)` looks equivalent, but
+     the production CSS minifier drops the initial value `none`, letting the
+     base dialog's `-translate-x-1/2 -translate-y-1/2` utilities through and
+     shifting the palette left and up on mobile. */
+  translate: -50% 0;
   padding: 0;
 }
 
@@ -366,21 +370,17 @@
   transform: translateY(calc(100% + 2px));
 }
 
-.player-drawer-popup[data-ending-style] {
-  transition-duration: calc(var(--drawer-swipe-strength, 1) * 420ms);
-}
-
+/* On wide screens the sheet is anchored to the bottom-right and slides in
+   from the right edge, so the exit transform travels sideways. */
 @media (min-width: 768px) {
-  /* Wide screens: the sheet sits on the left, so it slides in horizontally. */
-  .player-drawer-popup {
-    transform: translateX(var(--drawer-swipe-movement-x, 0px));
-    padding-bottom: 0;
-  }
-
   .player-drawer-popup[data-starting-style],
   .player-drawer-popup[data-ending-style] {
-    transform: translateX(calc(-100% - 2px));
+    transform: translateX(calc(100% + 2rem));
   }
+}
+
+.player-drawer-popup[data-ending-style] {
+  transition-duration: calc(var(--drawer-swipe-strength, 1) * 420ms);
 }
 
 @media (prefers-reduced-motion: reduce) {

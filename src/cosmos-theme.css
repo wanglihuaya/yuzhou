@@ -1,0 +1,390 @@
+/*
+ * Cosmos Archive theme.
+ *
+ * A visual language borrowed from the xiaoyuzhoufm.com episode page:
+ *
+ *   1. Paper, not glass.        White pages, hairline rules, one soft band of
+ *                               ruled lines along the top of the page.
+ *   2. A single warm accent.    Burnt sienna (#BE621C), taken from the
+ *                               reference page's own theme colour. Links,
+ *                               the primary button and the active state all
+ *                               use it; nothing else is coloured.
+ *   3. Editorial type.          The reference sets titles in DIN Alternate /
+ *                               Barlow Semi Condensed over the system Chinese
+ *                               sans. Body copy is the platform's own UI font.
+ *   4. Quiet corners.           Controls 4px, panes 6-8px, avatars round.
+ *                               No pills, no glass, no gradients on faces.
+ *
+ * Dark is the same page after dusk: warm charcoal paper, the same hairlines,
+ * and the accent lifted a step so it still reads on a dark ground.
+ */
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Noto Sans SC",
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-heading: "DIN Alternate", "Barlow Semi Condensed", "DINAlternate-Bold",
+    -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", sans-serif;
+  --font-mono: "SF Mono", ui-monospace, SFMono-Regular, Menlo, Consolas,
+    monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-muted: var(--brand-muted);
+  --color-link: var(--link);
+  --color-success: var(--success);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 2px);
+  --radius-2xl: calc(var(--radius) + 6px);
+  --radius-3xl: calc(var(--radius) + 10px);
+  --radius-4xl: calc(var(--radius) + 14px);
+}
+
+/* ---- Daylight ------------------------------------------------------------- */
+
+:root {
+  --radius: 0.5rem;
+  --radius-control: 0.25rem;
+
+  /* Paper and ink, both taken from the reference page (--theme-color there is
+     hsl(26, 74.3%, 42.7%), its body ink is #161517). */
+  --background: #ffffff;
+  --foreground: #161517;
+
+  --card: #ffffff;
+  --card-foreground: #161517;
+  --popover: #ffffff;
+  --popover-foreground: #161517;
+
+  --primary: #be621c;
+  --primary-foreground: #ffffff;
+  --secondary: #f7f4f1;
+  --secondary-foreground: #57524d;
+  --muted: #f6f5f3;
+  --muted-foreground: #7a756e;
+  --accent: #f6f5f3;
+  --accent-foreground: #161517;
+  --destructive: #c43b2d;
+  --border: #eae8e5;
+  --input: #dedbd7;
+  --ring: #be621c;
+
+  --brand: #be621c;
+  --brand-foreground: #ffffff;
+  --brand-muted: #faf0e7;
+  --link: #be621c;
+  --success: #3f8a5b;
+
+  /* The ruled band that opens the page, and the hairlines used on it. */
+  --paper-line: #f4f3f1;
+  --paper-tint: #fbfaf9;
+  --cover-shadow: rgb(0 0 0 / 10%);
+  --cover-edge: rgb(0 0 0 / 5%);
+
+  --chart-1: #be621c;
+  --chart-2: #d99a62;
+  --chart-3: #8a8680;
+  --chart-4: #c9c5bf;
+  --chart-5: #eae8e5;
+
+  --sidebar: #fbfaf9;
+  --sidebar-foreground: #161517;
+  --sidebar-primary: #be621c;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f6f5f3;
+  --sidebar-accent-foreground: #161517;
+  --sidebar-border: #eae8e5;
+  --sidebar-ring: #be621c;
+}
+
+/* ---- After dusk ----------------------------------------------------------- */
+
+.dark {
+  color-scheme: dark;
+
+  --background: #151413;
+  --foreground: #f1efeb;
+
+  --card: #1c1b19;
+  --card-foreground: #f1efeb;
+  --popover: #211f1d;
+  --popover-foreground: #f1efeb;
+
+  --primary: #e8934c;
+  --primary-foreground: #1c1208;
+  --secondary: #242220;
+  --secondary-foreground: #d6d1c9;
+  --muted: #232120;
+  --muted-foreground: #a29c93;
+  --accent: #232120;
+  --accent-foreground: #f1efeb;
+  --destructive: #ef7263;
+  --border: #2e2b28;
+  --input: #3a3633;
+  --ring: #e8934c;
+
+  --brand: #e8934c;
+  --brand-foreground: #1c1208;
+  --brand-muted: #2c2219;
+  --link: #eda267;
+  --success: #74b88b;
+
+  --paper-line: #201e1c;
+  --paper-tint: #181716;
+  --cover-shadow: rgb(0 0 0 / 55%);
+  --cover-edge: rgb(255 255 255 / 7%);
+
+  --chart-1: #e8934c;
+  --chart-2: #b9763e;
+  --chart-3: #a29c93;
+  --chart-4: #5c5751;
+  --chart-5: #2e2b28;
+
+  --sidebar: #181716;
+  --sidebar-foreground: #f1efeb;
+  --sidebar-primary: #e8934c;
+  --sidebar-primary-foreground: #1c1208;
+  --sidebar-accent: #232120;
+  --sidebar-accent-foreground: #f1efeb;
+  --sidebar-border: #2e2b28;
+  --sidebar-ring: #e8934c;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    @apply font-sans;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-synthesis-weight: none;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--brand) 22%, transparent);
+    color: var(--foreground);
+  }
+
+  /* Switches, inputs and the like keep the page's warm neutrals. */
+  input:-webkit-autofill,
+  textarea:-webkit-autofill,
+  select:-webkit-autofill {
+    -webkit-text-fill-color: var(--foreground);
+    caret-color: var(--foreground);
+    transition:
+      background-color 99999s ease-out 0s,
+      color 99999s ease-out 0s;
+  }
+}
+
+/* ---- shadcn/ui, re-cut for paper ----------------------------------------- */
+
+/* Controls are square-ish here, the way the reference page's own buttons are.
+   The theme's radius only sets panes; a control's radius comes from this. */
+:is(
+  [data-slot="button"],
+  .group\/button,
+  [data-slot="input"],
+  [data-slot="textarea"],
+  [data-slot="select-trigger"]
+).rounded-lg {
+  --radius: var(--radius-control);
+}
+
+/* The primary button: flat sienna, white ink, no bevel. It darkens under the
+   pointer rather than turning translucent. */
+[data-slot="button"][data-variant="default"] {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+  box-shadow: 0 1px 2px color-mix(in oklab, var(--primary) 18%, transparent);
+}
+[data-slot="button"][data-variant="default"]:hover {
+  background-color: color-mix(in oklab, var(--primary) 88%, #000);
+}
+.dark [data-slot="button"][data-variant="default"]:hover {
+  background-color: color-mix(in oklab, var(--primary) 92%, #fff);
+}
+
+/* Outline: a hairline box on paper. */
+[data-slot="button"][data-variant="outline"] {
+  border-color: var(--input);
+  background-color: var(--card);
+  color: var(--foreground);
+}
+[data-slot="button"][data-variant="outline"]:hover,
+[data-slot="button"][data-variant="outline"][aria-expanded="true"] {
+  background-color: var(--muted);
+  color: var(--foreground);
+}
+
+/* Ghost: only a quiet fill. */
+[data-slot="button"][data-variant="ghost"]:hover,
+[data-slot="button"][data-variant="ghost"][aria-expanded="true"] {
+  background-color: var(--muted);
+}
+
+[data-slot="button"][data-variant="secondary"] {
+  background-color: var(--secondary);
+  color: var(--secondary-foreground);
+}
+[data-slot="button"][data-variant="secondary"]:hover {
+  background-color: color-mix(in oklab, var(--secondary) 86%, var(--foreground));
+}
+
+/* Fields: white with a hairline; the line warms to the accent on focus. */
+[data-slot="input"],
+[data-slot="textarea"],
+[data-slot="select-trigger"] {
+  background-color: var(--card);
+  border-color: var(--input);
+}
+[data-slot="input"]:not([aria-invalid="true"]):focus-visible,
+[data-slot="textarea"]:not([aria-invalid="true"]):focus-visible,
+[data-slot="select-trigger"]:not([aria-invalid="true"]):focus-visible {
+  border-color: var(--brand);
+  --tw-ring-color: color-mix(in oklab, var(--brand) 18%, transparent);
+}
+
+/* Menus float on a quiet shadow, with the hairline doing the outlining. */
+[data-slot="dropdown-menu-content"],
+[data-slot="dropdown-menu-sub-content"],
+[data-slot="dialog-content"],
+[data-slot="tooltip-content"] {
+  background-color: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--border);
+  box-shadow:
+    0 10px 30px -12px rgb(0 0 0 / 18%),
+    0 2px 6px -2px rgb(0 0 0 / 8%);
+}
+.dark [data-slot="dropdown-menu-content"],
+.dark [data-slot="dropdown-menu-sub-content"],
+.dark [data-slot="dialog-content"],
+.dark [data-slot="tooltip-content"] {
+  box-shadow:
+    0 10px 30px -12px rgb(0 0 0 / 60%),
+    0 2px 6px -2px rgb(0 0 0 / 40%);
+}
+[data-slot="dropdown-menu-content"] {
+  border-radius: var(--radius);
+  padding: 0.25rem;
+}
+[data-slot="dropdown-menu-item"],
+[data-slot="dropdown-menu-checkbox-item"],
+[data-slot="dropdown-menu-radio-item"],
+[data-slot="dropdown-menu-sub-trigger"] {
+  border-radius: var(--radius-control);
+  padding-block: 0.4rem;
+}
+[data-slot="dropdown-menu-item"]:focus,
+[data-slot="dropdown-menu-checkbox-item"]:focus,
+[data-slot="dropdown-menu-radio-item"]:focus,
+[data-slot="dropdown-menu-sub-trigger"]:focus,
+[data-slot="dropdown-menu-sub-trigger"][data-open] {
+  background-color: var(--muted);
+  color: var(--foreground);
+}
+[data-slot="dropdown-menu-item"][data-variant="destructive"] {
+  color: var(--destructive);
+}
+
+[data-slot="dialog-content"] {
+  border-radius: calc(var(--radius) + 2px);
+  padding: 1.25rem;
+}
+[data-slot="dialog-overlay"] {
+  background-color: rgb(22 21 23 / 32%);
+  backdrop-filter: blur(2px);
+}
+
+/* Badges are small square tags, not pills. */
+[data-slot="badge"] {
+  border-radius: 3px;
+  letter-spacing: 0.01em;
+}
+[data-slot="badge"][data-variant="secondary"] {
+  background-color: var(--muted);
+  color: var(--muted-foreground);
+}
+[data-slot="badge"][data-variant="outline"] {
+  border-color: var(--border);
+  color: var(--muted-foreground);
+}
+[data-slot="badge"][data-variant="destructive"] {
+  background-color: color-mix(in oklab, var(--destructive) 10%, transparent);
+  color: var(--destructive);
+}
+
+/* A groove with sienna in it. */
+[data-slot="progress"] {
+  background-color: var(--muted);
+}
+[data-slot="progress-indicator"] {
+  background-color: var(--brand);
+}
+
+[data-slot="skeleton"] {
+  background-color: var(--muted);
+}
+
+/* The keyboard's line is the accent, two pixels wide, standing off the edge.
+   The doubled attribute selector outranks the primary button's own shadow so a
+   focused primary button keeps a visible ring. */
+[data-slot="button"][data-variant]:focus-visible,
+:is([data-slot="dropdown-menu-trigger"], [data-slot="dialog-close"]):focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--background),
+    0 0 0 4px color-mix(in oklab, var(--brand) 45%, transparent);
+}
+
+/* The reference page draws its section rules as one-pixel hairlines. */
+.hairline {
+  border-color: var(--border);
+}

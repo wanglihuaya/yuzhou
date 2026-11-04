@@ -35,12 +35,12 @@ export const Route = createRootRoute({
       },
       {
         name: 'theme-color',
-        content: '#e9e9ec',
+        content: '#ffffff',
         media: '(prefers-color-scheme: light)',
       },
       {
         name: 'theme-color',
-        content: '#171717',
+        content: '#151413',
         media: '(prefers-color-scheme: dark)',
       },
       {
@@ -94,20 +94,20 @@ export const Route = createRootRoute({
 
 function NotFound() {
   return (
-    <main className="mx-auto flex min-h-[60vh] w-full max-w-xl flex-col items-center justify-center px-4 py-16 text-center">
-      <p className="font-mono text-[10px] tracking-[0.24em] text-muted-foreground uppercase">
+    <main className="mx-auto flex min-h-[60vh] w-full max-w-xl flex-col items-center justify-center px-5 py-16 text-center">
+      <p className="text-[10px] tracking-[0.22em] text-brand uppercase">
         404 · Lost in space
       </p>
-      <h1 className="mt-3 text-3xl font-medium tracking-tight">
+      <h1 className="mt-3 font-heading text-[28px] font-bold tracking-[-0.02em]">
         这里没有声音。
       </h1>
-      <p className="mt-3 text-sm text-muted-foreground">
+      <p className="mt-2 text-[13px] text-muted-foreground">
         这个页面可能已经漂移到宇宙边缘了。
       </p>
       <Link
         to="/"
         search={{ url: undefined }}
-        className="mt-6 inline-flex h-11 items-center rounded-xl bg-primary px-5 text-sm font-medium text-primary-foreground no-underline transition hover:bg-primary/90"
+        className="mt-6 inline-flex h-10 items-center rounded-[4px] bg-primary px-4 text-[13px] font-medium text-primary-foreground no-underline transition-colors hover:bg-primary/90"
       >
         回到首页
       </Link>

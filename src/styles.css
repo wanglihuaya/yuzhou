@@ -1,10 +1,7 @@
-@import "@fontsource-variable/geist";
-@import "@fontsource-variable/geist-mono";
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "./solid-glass.css";
-@plugin "@tailwindcss/typography";
+@import "./cosmos-theme.css";
 
 @layer base {
   html {
@@ -27,11 +24,6 @@
     touch-action: manipulation;
   }
 
-  ::selection {
-    background: color-mix(in oklch, var(--brand) 30%, transparent);
-    color: var(--foreground);
-  }
-
   ::-webkit-scrollbar {
     width: 10px;
     height: 10px;
@@ -41,48 +33,232 @@
     border: 3px solid transparent;
     border-radius: 999px;
     background-clip: content-box;
-    background-color: color-mix(in oklch, var(--foreground) 20%, transparent);
+    background-color: color-mix(in oklab, var(--foreground) 18%, transparent);
   }
 }
 
-/* The cover is content, not a glass surface: it keeps a quiet contact shadow
-   and a hairline so it sits on the pane without competing with it. */
+/* ---- The ruled band -------------------------------------------------------
+
+   The reference page opens on a sheet of faintly ruled paper: one light line
+   every five or six pixels, dissolving into white before the content starts.
+   It is the page's signature, so it sits behind the hero on every breakpoint
+   and fades out across roughly the first two hundred pixels. */
+
+.paper-band {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 220px;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    var(--paper-line) 0px,
+    var(--paper-line) 1px,
+    transparent 1px,
+    transparent 6px
+  );
+  background-position: 0 4px;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    rgb(0 0 0 / 100%) 0%,
+    rgb(0 0 0 / 85%) 45%,
+    rgb(0 0 0 / 0%) 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    rgb(0 0 0 / 100%) 0%,
+    rgb(0 0 0 / 85%) 45%,
+    rgb(0 0 0 / 0%) 100%
+  );
+}
+
+/* A hairline that starts and ends in nothing, for section transitions that
+   should not run the full width of the page. */
+.hairline-fade {
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--border) 12%,
+    var(--border) 88%,
+    transparent
+  );
+}
+
+/* ---- Covers ---------------------------------------------------------------
+
+   The reference gives a cover a one-pixel light frame and one deep, soft
+   shadow — no gradient, no glass. It is the only elevated thing on the page. */
+
 .cover-frame {
   position: relative;
   isolation: isolate;
+  overflow: hidden;
+  border-radius: 6px;
+  background-color: var(--muted);
   box-shadow:
-    0 0 0 1px var(--glass-edge),
-    0 24px 48px -28px var(--glass-shade);
+    0 0 0 1px var(--cover-edge),
+    0 5px 40px var(--cover-shadow);
+  transition: box-shadow 240ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* A single line of light travelling along a pane's top edge, for sections that
-   are not glass themselves but need the same edge language. */
-.hairline-top {
+/* ---- Show notes -----------------------------------------------------------
+
+   Rendered HTML from the episode page. It is set like the reference's body
+   copy: 15px on a generous line, ink at rest, sienna links, images rounded
+   and centred. Everything is scoped so the sanitizer's plain tags need no
+   utility classes. */
+
+.show-notes {
+  color: var(--foreground);
+  font-size: 15px;
+  line-height: 1.9;
+  overflow-wrap: anywhere;
+}
+
+.show-notes > :first-child {
+  margin-top: 0;
+}
+
+.show-notes > :last-child {
+  margin-bottom: 0;
+}
+
+.show-notes p {
+  margin: 0.9em 0;
+}
+
+.show-notes h1,
+.show-notes h2,
+.show-notes h3,
+.show-notes h4 {
+  margin: 1.6em 0 0.5em;
+  font-family: var(--font-heading);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.5;
+  letter-spacing: -0.01em;
+}
+
+.show-notes h1 {
+  font-size: 18px;
+}
+
+.show-notes a {
+  color: var(--brand);
+  text-decoration: none;
+  text-underline-offset: 3px;
+}
+
+.show-notes a:hover {
+  text-decoration: underline;
+}
+
+.show-notes strong,
+.show-notes b {
+  font-weight: 600;
+}
+
+.show-notes ul,
+.show-notes ol {
+  margin: 0.9em 0;
+  padding-left: 1.4em;
+}
+
+.show-notes ul {
+  list-style: disc;
+}
+
+.show-notes ol {
+  list-style: decimal;
+}
+
+.show-notes li {
+  margin: 0.28em 0;
+  padding-left: 0.15em;
+}
+
+.show-notes li::marker {
+  color: var(--muted-foreground);
+}
+
+.show-notes blockquote {
+  margin: 1.2em 0;
+  padding: 0.1em 0 0.1em 1em;
+  border-left: 2px solid color-mix(in oklab, var(--brand) 40%, transparent);
+  color: var(--muted-foreground);
+}
+
+.show-notes img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  max-height: 520px;
+  width: auto;
+  margin: 1.1em auto;
+  border-radius: 6px;
+}
+
+.show-notes hr {
+  margin: 1.6em 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+
+.show-notes table {
+  width: 100%;
+  margin: 1em 0;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.show-notes th,
+.show-notes td {
+  padding: 0.5em 0.6em;
+  border: 1px solid var(--border);
+  text-align: left;
+}
+
+.show-notes th {
+  background: var(--muted);
+  font-weight: 600;
+}
+
+.show-notes code {
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+  background: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+}
+
+/* The reference folds long notes behind an orange "展开 Show Notes" button.
+   Here the fold is a mask, so the text fades instead of being cut. */
+.notes-fold {
   position: relative;
+  max-height: 360px;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 62%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 62%, transparent 100%);
 }
 
-.hairline-top::before {
-  content: "";
-  position: absolute;
-  inset: 0 1.25rem auto;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    var(--glass-rim),
-    transparent
-  );
-  pointer-events: none;
+.notes-fold[data-expanded="true"] {
+  max-height: none;
+  -webkit-mask-image: none;
+  mask-image: none;
 }
+
+/* ---- Motion ---------------------------------------------------------------
+
+   One quiet rise for content that has just arrived, and nothing else. */
 
 .animate-rise {
-  animation: rise 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: rise 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes rise {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;

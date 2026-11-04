@@ -10,9 +10,10 @@
 - 单集页的完整 shownotes（安全过滤后的富文本）与公开评论
 - 播客页最新单集的逐集下载与批量下载
 
-基于 **TanStack Start**（React 19 + Vite）与 **shadcn/ui** 构建，界面采用
-[**Solid Glass**](https://deeplethe.github.io/solid-glass/docs) 主题：中性灰的厚玻璃面板、
-只在边缘做光的质感、Geist 字体，以及克制的品牌青色点缀。无需登录小宇宙账号。
+基于 **TanStack Start**（React 19 + Vite）与 **shadcn/ui** 构建，界面参照
+[小宇宙单集页](https://www.xiaoyuzhoufm.com/episode/6ae876cf97726cd4675b98f1) 的视觉语言：
+白色纸面、顶部若隐若现的横线纸背景、焦糖橙（`#BE621C`）强调色、DIN Alternate /
+PingFang 字体组合，以及蓝绿渐变的星球标志。无需登录小宇宙账号。
 
 > 灵感来自 [LGiki/cosmos-enhanced](https://github.com/LGiki/cosmos-enhanced) 浏览器扩展。本项目把「网页内提取 → 原生下载」的思路迁移到了独立 Web 应用。
 
@@ -64,21 +65,26 @@ pnpm preview
 - 可以复制本页链接或单个下载地址，粘贴到 Safari / 系统浏览器后继续下载。
 - 批量下载同样会被拦截并给出说明，不会静默失败。
 
-## 界面主题（Solid Glass）
+## 界面风格（小宇宙同款）
 
-主题通过 shadcn registry 安装：
+界面不依赖第三方主题包，而是照着[小宇宙单集页](https://www.xiaoyuzhoufm.com/episode/6ae876cf97726cd4675b98f1)
+重做了一套设计语言：
 
-```bash
-pnpm dlx shadcn@latest add deeplethe/solid-glass/solid-glass -y
-```
+- **纸面与横线**：白色背景，页面顶部是一段 1px / 6px 的浅灰横线纸，向下渐隐。
+- **焦糖橙**：小宇宙页面从封面提取的主题色是 `hsl(26 74.3% 42.7%)`（`#BE621C`），
+  这里固定为品牌色，用于链接、主按钮、状态点与激活态。
+- **字体**：标题使用 DIN Alternate / Barlow Semi Condensed / PingFang 的组合，
+  正文回落到系统 UI 字体，与小宇宙网页端一致。
+- **标志**：`src/components/Logo.tsx` 中的蓝绿渐变星球（`#25B4E1 → #85C5D0 → #E5D5BE`），
+  与站点 favicon 同源。
+- **形状**：控件 4px、面板 6–8px 圆角，封面 6px 并带一层柔和投影，不使用玻璃拟态。
 
-`src/solid-glass.css` 提供颜色、字体、圆角与玻璃材质；`src/styles.css` 只保留
-Tailwind 入口、Geist 字体和少量页面级细节（封面阴影、安全区、减弱动效）。
-字体通过 `@fontsource-variable/geist` 自托管，不依赖 Google Fonts。
+`src/cosmos-theme.css` 提供颜色、字体、圆角与 shadcn/ui 的组件重绘；`src/styles.css`
+只保留 Tailwind 入口、纸面横线、封面阴影、show notes 排版与减弱动效。
 
-- 深色是主题原本设计的样子：平坦的未点亮背景，面板为中性灰厚玻璃。
-- 浅色是同一套玻璃在日光下的版本，面与面之间仍靠边缘的亮线、细线和阴影区分。
-- 品牌青色（`--brand`）只用于状态点、勾选等小面积提示。
+- 浅色是参照页面原本的样子：纯白纸面、细分割线、焦糖橙点缀。
+- 深色是同一套纸面在黄昏后的版本：暖炭黑背景、相同细线、提亮的橙色。
+- 字体全部使用系统字体，不加载远程字体文件。
 
 ## 工作原理
 
@@ -132,8 +138,8 @@ TanStack Start Server Function  ──►  https://www.xiaoyuzhoufm.com/episode|
 | `src/routes/api/download.ts` | 流式下载代理、域名白名单、中文文件名、Range 支持（兜底） |
 | `src/components/ArchiveApp.tsx` | 页面状态、单集/播客视图、批量下载、微信下载提示 |
 | `src/routes/index.tsx` | `?url=` 搜索参数与首页入口 |
-| `src/styles.css` | Tailwind 入口、Geist 字体、页面级细节 |
-| `src/solid-glass.css` | Solid Glass 主题 tokens 与玻璃材质 |
+| `src/styles.css` | Tailwind 入口、纸面横线、封面阴影、show notes 排版 |
+| `src/cosmos-theme.css` | 小宇宙同款主题 tokens 与 shadcn/ui 组件重绘 |
 | `src/lib/wechat.ts` | 微信 UA 检测与下载拦截通知 |
 | `src/components/ui/*` | shadcn/ui 组件 |
 

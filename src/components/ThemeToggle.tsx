@@ -82,7 +82,7 @@ export default function ThemeToggle() {
       onClick={toggleMode}
       aria-label={label}
       title={label}
-      className="size-10 rounded-xl text-muted-foreground hover:text-foreground sm:size-9"
+      className="size-9 rounded-[4px] text-muted-foreground hover:text-foreground"
     >
       <Icon className="size-4" />
     </Button>

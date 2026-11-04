@@ -10,6 +10,7 @@ import {
 } from 'react'
 import {
   AudioLines,
+  Captions,
   List,
   Loader2,
   Moon,
@@ -644,7 +645,8 @@ function PlayerSheet({
     play,
     pause,
   } = useAudioPlayer()
-  const [showQueue, setShowQueue] = useState(false)
+  // The upper half of the sheet: now playing, the queue, or transcript.
+  const [panel, setPanel] = useState<'queue' | 'transcribe' | null>(null)
   const [seeking, setSeeking] = useState(false)
   const [sleepUntil, setSleepUntil] = useState<number | null>(null)
   const [sleepNow, setSleepNow] = useState(() => Date.now())
@@ -744,7 +746,7 @@ function PlayerSheet({
       onOpenChange={onOpenChange}
       onOpenChangeComplete={(nextOpen) => {
         if (!nextOpen) {
-          setShowQueue(false)
+          setPanel(null)
           setSleepMenuOpen(false)
         }
       }}
@@ -755,11 +757,11 @@ function PlayerSheet({
     >
       <Drawer.Portal>
         <Drawer.Backdrop className="player-drawer-backdrop fixed inset-0 z-50 bg-black" />
-        <Drawer.Viewport className="fixed inset-0 z-50 flex items-end justify-center">
-          <Drawer.Popup className="player-drawer-popup h-[60dvh] w-full max-w-[480px] overflow-hidden rounded-t-[16px] border border-b-0 border-border bg-background shadow-[0_-24px_60px_-24px_rgb(0_0_0/0.45)] outline-none sm:mb-4 sm:rounded-[12px] sm:border-b">
+        <Drawer.Viewport className="fixed inset-0 z-50 flex items-end justify-center md:bottom-[63px] md:items-stretch md:justify-start">
+          <Drawer.Popup className="player-drawer-popup h-[60dvh] w-full max-w-[480px] overflow-hidden rounded-t-[16px] border border-b-0 border-border bg-background shadow-[0_-24px_60px_-24px_rgb(0_0_0/0.45)] outline-none sm:mb-4 sm:rounded-[12px] sm:border-b md:mb-0 md:h-full md:w-[420px] md:max-w-[420px] md:rounded-l-none md:rounded-r-[12px] md:shadow-[24px_0_60px_-24px_rgb(0_0_0/0.45)]">
             {/* Only the handle starts a swipe; the content below opts out. */}
             <div
-              className="flex h-7 shrink-0 cursor-grab touch-none items-center justify-center select-none active:cursor-grabbing"
+              className="flex h-7 shrink-0 cursor-grab touch-none items-center justify-center select-none active:cursor-grabbing md:hidden"
               aria-hidden="true"
             >
               <span className="h-1 w-10 rounded-full bg-border" />
@@ -767,7 +769,7 @@ function PlayerSheet({
 
             <Drawer.Content
               data-base-ui-swipe-ignore
-              className="flex min-h-0 flex-1 flex-col px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]"
+              className="flex min-h-0 flex-1 flex-col px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] md:pt-4"
             >
               <Drawer.Title className="sr-only">
                 正在播放：{track.title}
@@ -776,7 +778,7 @@ function PlayerSheet({
                 播放进度、倍速与播放列表
               </Drawer.Description>
 
-              {showQueue ? (
+              {panel === 'queue' ? (
                 <div className="flex min-h-0 flex-1 flex-col pt-1">
                   <div className="flex items-center justify-between">
                     <h3 className="font-heading text-[16px] font-bold tracking-[-0.01em] text-foreground">
@@ -846,6 +848,32 @@ function PlayerSheet({
                         队列是空的。
                       </p>
                     )}
+                  </div>
+                </div>
+              ) : panel === 'transcribe' ? (
+                <div className="flex min-h-0 flex-1 flex-col pt-1">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-heading text-[16px] font-bold tracking-[-0.01em] text-foreground">
+                      转译
+                    </h3>
+                  </div>
+
+                  <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 pb-4 text-center">
+                    <span className="grid size-12 place-items-center rounded-full bg-muted text-muted-foreground">
+                      <Captions
+                        className="size-6"
+                        strokeWidth={1.6}
+                        aria-hidden="true"
+                      />
+                    </span>
+                    <div>
+                      <p className="text-[14px] font-medium text-foreground">
+                        敬请期待
+                      </p>
+                      <p className="mx-auto mt-1 max-w-[240px] text-[12px] leading-5 text-muted-foreground">
+                        声音转文字功能正在开发中，完成后可在这里查看节目文字稿。
+                      </p>
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -1016,16 +1044,40 @@ function PlayerSheet({
                 </div>
 
                 {/* Secondary actions live on their own centered row. */}
-                <div className="mt-1 flex h-10 items-center justify-center">
+                <div className="mt-1 flex h-10 items-center justify-around">
                   <button
                     type="button"
-                    onClick={() => setShowQueue((current) => !current)}
-                    aria-label={showQueue ? '收起播放列表' : '播放列表'}
-                    aria-pressed={showQueue}
-                    title={showQueue ? '收起播放列表' : '播放列表'}
+                    onClick={() =>
+                      setPanel((current) =>
+                        current === 'transcribe' ? null : 'transcribe',
+                      )
+                    }
+                    aria-label={panel === 'transcribe' ? '收起转译' : '转译'}
+                    aria-pressed={panel === 'transcribe'}
+                    title={panel === 'transcribe' ? '收起转译' : '转译'}
                     className={cn(
                       'grid size-10 place-items-center rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none',
-                      showQueue
+                      panel === 'transcribe'
+                        ? 'bg-brand-muted text-brand hover:bg-brand-muted/80'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                    )}
+                  >
+                    <Captions className="size-5" strokeWidth={1.8} />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPanel((current) =>
+                        current === 'queue' ? null : 'queue',
+                      )
+                    }
+                    aria-label={panel === 'queue' ? '收起播放列表' : '播放列表'}
+                    aria-pressed={panel === 'queue'}
+                    title={panel === 'queue' ? '收起播放列表' : '播放列表'}
+                    className={cn(
+                      'grid size-10 place-items-center rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none',
+                      panel === 'queue'
                         ? 'bg-brand-muted text-brand hover:bg-brand-muted/80'
                         : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                     )}

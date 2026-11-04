@@ -370,6 +370,19 @@
   transition-duration: calc(var(--drawer-swipe-strength, 1) * 420ms);
 }
 
+@media (min-width: 768px) {
+  /* Wide screens: the sheet sits on the left, so it slides in horizontally. */
+  .player-drawer-popup {
+    transform: translateX(var(--drawer-swipe-movement-x, 0px));
+    padding-bottom: 0;
+  }
+
+  .player-drawer-popup[data-starting-style],
+  .player-drawer-popup[data-ending-style] {
+    transform: translateX(calc(-100% - 2px));
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .player-drawer-backdrop,
   .player-drawer-popup {

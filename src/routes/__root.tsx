@@ -6,10 +6,10 @@ import {
 } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 
+import { AppToaster } from '../components/AppToaster'
+import { AudioPlayerProvider } from '../components/AudioPlayer'
 import Footer from '../components/Footer'
 import Header from '../components/Header'
-import { AudioPlayerProvider } from '../components/AudioPlayer'
-import { AppToaster } from '../components/AppToaster'
 import { LibraryProvider } from '../components/LibraryProvider'
 import {
   DesktopLibrarySidebar,
@@ -196,16 +196,6 @@ function RootDocument({ children }: { children: ReactNode }) {
           defer
           src="https://analyse.commands.top/recorder.js"
           data-website-id="f0b412f9-8fe3-4d43-9889-9cd0e7316857"
-        />
-        <script
-          defer
-          src="https://analyse.commands.top/script.js"
-          data-website-id="e9b8f8b7-14b1-4cca-bf45-28f9d641a39f"
-        />
-        <script
-          defer
-          src="https://analyse.commands.top/recorder.js"
-          data-website-id="e9b8f8b7-14b1-4cca-bf45-28f9d641a39f"
         />
       </head>
       <body className="flex min-h-dvh flex-col font-sans antialiased">
